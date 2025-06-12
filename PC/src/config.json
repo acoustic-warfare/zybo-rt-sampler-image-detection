@@ -30,7 +30,8 @@
         "expression": {
             "BUFFER_LENGTH": "N_SAMPLES * N_MICROPHONES",
             "ASPECT_RATIO": "4/3"
-        }
+        },
+        "USE_COMPUTER_VISION": true
     },
     "python": {
         "imports": [

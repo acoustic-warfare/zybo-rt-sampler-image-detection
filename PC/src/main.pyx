@@ -582,25 +582,40 @@ def just_miso_loop(q: JoinableQueue, running: Value):
 
 def mimo():
     from lib.visual import Viewer
-    consumer = Viewer().loop
-    producer = b
-    jobs = 1
-    q = JoinableQueue(maxsize=2)
-
+    import time
+    q_beam = JoinableQueue(maxsize=2)
+    q_yolo = None
+    using_yolo = False
+    yolo_proc = None
     v = Value('i', 1)
 
+    if(True): # Change to False to disable YOLO
+        q_yolo = JoinableQueue(maxsize=2)
+        import sys
+        sys.path.append("../image-detection")
+        from run_object_oriented import yolo_model
+        model = yolo_model("../image-detection/model/best.pt")
+        yolo_proc = Process(target=model.run_conf_n_inference, args=("../image-detection/footage/cordinate_drones.mp4", q_yolo, True, False))
+        yolo_proc.start()
+        using_yolo = True
+        
+
+    
+    producer = b
+    jobs = 1
+    viewer = Viewer(src="../image-detection/footage/cordinate_drones.mp4" )
     connect()
 
     try:
 
         producers = [
-            Process(target=producer, args=(q, v))
+            Process(target=producer, args=(q_beam, v))
             for _ in range(jobs)
         ]
 
         # daemon=True is important here
         consumers = [
-            Process(target=consumer, args=(q, v), daemon=True)
+            Process(target=Viewer.loop, args=(viewer, q_beam, v, q_yolo), daemon=True)
             for _ in range(jobs * 1)
         ]
 
@@ -610,8 +625,14 @@ def mimo():
 
         for p in producers:
             p.join()
-
-    finally: # Stop the program
+        if(using_yolo):
+            if(yolo_proc.is_alive()):
+                yolo_proc.join()
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+    finally:
         v.value = 0
         disconnect()
 

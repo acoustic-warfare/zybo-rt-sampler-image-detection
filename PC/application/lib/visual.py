@@ -300,7 +300,7 @@ class Viewer:
         self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
         self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
-    def loop(self, q: JoinableQueue, v: Value):
+    def loop(self, q: JoinableQueue, v: Value, q2: JoinableQueue = None):
         """Threaded or Multiprocessing loop that should not be called by the user
 
         Args:
@@ -314,6 +314,16 @@ class Viewer:
             try:
                 output = q.get(block=False)
                 q.task_done()
+                yolo_frame = None
+                if q2 is not None:
+                    try:
+                        yolo_frame = q2.get(block=False)
+                        q2.task_done()
+                    except queue.Empty:
+                        yolo_frame = np.zeros_like(prev)  # fallback if no YOLO frame
+                else:
+                    yolo_frame = np.zeros_like(prev)
+
                 status, frame = self.capture.read()
                 frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
                 try:
@@ -324,16 +334,24 @@ class Viewer:
                     break
 
                 res1, should_overlay = calculate_heatmap(output)
-
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
                 prev = res
 
                 if should_overlay:
-                    image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
+                    heatmap_image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
                 else:
-                    image = frame
+                    heatmap_image = frame
 
-                cv2.imshow(APPLICATION_NAME, image)
+                # Resize YOLO frame to match
+                if yolo_frame is not None:
+                    yolo_frame = cv2.resize(yolo_frame, WINDOW_DIMENSIONS)
+                else:
+                    yolo_frame = np.zeros_like(heatmap_image)
+
+                # Combine side by side
+                combined = np.hstack((heatmap_image, yolo_frame))
+
+                cv2.imshow(APPLICATION_NAME, combined)
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
                 cv2.waitKey(1)
             except queue.Empty:

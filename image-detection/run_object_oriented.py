@@ -1,5 +1,4 @@
 from ultralytics import settings,YOLO
-
 class yolo_model:
     
     
@@ -21,8 +20,12 @@ class yolo_model:
             for conf in confidences:
                 print(f"Confidence: {conf:.2f}")
     
-    def run_conf_n_inference(self, source, stream=False, show=True):
+    def run_conf_n_inference(self, source, q, stream=False, show=True):
         for result in self.model(source=source, stream=stream, show=show):
             confidences = result.boxes.conf.cpu().numpy()   
             for conf in confidences:
                 print(f"Confidence: {conf:.2f}")
+                frame = result.plot()
+                print("YOLO: putting frame in queue")  # <-- ADD THIS
+
+                q.put(frame)            

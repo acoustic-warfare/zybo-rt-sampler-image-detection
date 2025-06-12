@@ -33,7 +33,7 @@ lib/beamformer.so: config
 	mv *.so lib/
 	# cp unused_mics.npy lib/
 	cp -u -n src/visual.py lib/visual.py
-	cp -u -n lib/* application/lib/
+	find lib/ -maxdepth 1 -type f -exec cp -u -n {} application/lib/ \;
 	cp interface/config.py application/interface/config.py
 	
 bor: config
