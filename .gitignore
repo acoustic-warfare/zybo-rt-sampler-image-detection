@@ -41,3 +41,6 @@ __pycache__/
 
 PC/build/
 PC/lib/
+
+#Virtual environments
+venv/
