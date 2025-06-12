@@ -603,7 +603,7 @@ def mimo():
     
     producer = b
     jobs = 1
-    viewer = Viewer(src="../image-detection/footage/cordinate_drones.mp4" )
+    viewer = Viewer()
     connect()
 
     try:

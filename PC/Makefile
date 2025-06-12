@@ -75,7 +75,6 @@ cytest: config
 clean:
 	echo "Removing Generated Build Files"
 	rm -rf __pycache__
-	rm -rf ../$(VENV)
 
 	ls build/ | grep -xv ".gitignore" | xargs -I {} sh -c "rm -r build/{}"
 	ls lib/ | grep -xv ".gitignore" | xargs -I {} sh -c "rm -r lib/{}"
