@@ -3,3 +3,6 @@ opencv-python
 matplotlib==3.7.3
 scipy
 cython
+setuptools
+scikit-image
+scikit-learn

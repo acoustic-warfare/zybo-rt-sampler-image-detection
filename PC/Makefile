@@ -6,13 +6,26 @@ PYTHON_PATH = `python3 -c "import distutils.sysconfig;print(distutils.sysconfig.
 CFLAGS = -O3 -march=native -mavx2
 LDFLAGS = -shared -pthread -fPIC -fwrapv -Wall -fno-strict-aliasing
 
+VENV = venv
+PYTHON = ../$(VENV)/bin/python3
+PIP = ../$(VENV)/bin/pip
+
+
 .PHONY: all
 
-all: lib/beamformer.so
+all: $(VENV)/bin/activate lib/beamformer.so 
 
 config:
 	python3 src/build_config.py
 	cp -u -n src/config.h src/algorithms/config.h
+
+$(VENV)/bin/activate: requirements.txt
+	python3 -m venv ../$(VENV)
+	@if [ -n "$$VIRTUAL_ENV" ]; then \
+		$(PIP) install -r requirements.txt; \
+	else \
+		echo "Not in a virtual environment. Please activate your venv before installing requirements."; \
+	fi
 
 lib/beamformer.so: config
 	python3 setup.py build_ext --inplace --build-lib=build
@@ -61,7 +74,11 @@ cytest: config
 
 clean:
 	echo "Removing Generated Build Files"
+	rm -rf __pycache__
+	rm -rf $(VENV)
+
 	ls build/ | grep -xv ".gitignore" | xargs -I {} sh -c "rm -r build/{}"
 	ls lib/ | grep -xv ".gitignore" | xargs -I {} sh -c "rm -r lib/{}"
 	# ls ../application/lib/ | grep -xv ".gitignore" | xargs -I {} sh -c "rm -r ../application/lib/{}"
 	# ls ../application/interface/ | grep -xv ".gitignore" | xargs -I {} sh -c "rm -r ../application/interface/{}"
+
