@@ -6,3 +6,4 @@ cython
 setuptools
 scikit-image
 scikit-learn
+ultralytics
