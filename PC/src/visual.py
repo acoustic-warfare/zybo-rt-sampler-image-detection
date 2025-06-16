@@ -153,13 +153,15 @@ def calculate_heatmap(image, threshold=1e-7, amount = 0.5, exponent = POWER):
     small_heatmap = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.uint8)
     
     max_power_level = np.max(image)
+    if image.ndim == 3:
+        image = image[..., 0]
+    safe_image = np.clip(image, 1e-12, None)
 
-    
 
-    if max_power_level > threshold:
+    if (max_power_level > threshold):
 
-        img = np.log10(image)
-        img -= np.log10(np.min(image))
+        img = np.log10(safe_image)
+        img -= np.log10(np.min(safe_image))
         img /= np.max(img)
 
         should_overlay = True
@@ -169,7 +171,7 @@ def calculate_heatmap(image, threshold=1e-7, amount = 0.5, exponent = POWER):
                 power_level = img[x, y]
 
                 # Only paint levels above a certain amount, i.e 50%
-                if power_level >= amount:
+                if (power_level >= amount):
                     power_level -= amount
                     power_level /= amount
 
@@ -295,10 +297,10 @@ class Viewer:
         """
         self.src = src
         self.cb = cb
-        self.capture = cv2.VideoCapture(self.src)
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
-        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+        #self.capture = cv2.VideoCapture(self.src)
+        # self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
+        # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
+        # self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
     def loop(self, q: JoinableQueue, v: Value, q2: JoinableQueue = None):
         """Threaded or Multiprocessing loop that should not be called by the user
@@ -326,7 +328,8 @@ class Viewer:
                 else:
                     yolo_frame = np.zeros_like(prev)
 
-                status, frame = self.capture.read()
+                frame = q.get(block=False)
+                q.task_done()
                 frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
                 try:
                     frame = cv2.resize(frame, WINDOW_DIMENSIONS)
@@ -337,9 +340,21 @@ class Viewer:
 
                 res1, should_overlay = calculate_heatmap(output)
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
+                if frame.shape != res.shape:
+                    res = cv2.resize(res, (frame.shape[1], frame.shape[0]))
+                    if len(res.shape) == 2:
+                        res = cv2.cvtColor(res, cv2.COLOR_GRAY2BGR)
+                    elif res.shape[2] == 1:
+                        res = cv2.cvtColor(res, cv2.COLOR_GRAY2BGR)
+                        
                 prev = res
 
                 if should_overlay:
+                    if frame.shape != res.shape:
+                        res = cv2.resize(res, (frame.shape[1], frame.shape[0]))
+
+                    if len(res.shape) == 2:
+                        res = cv2.cvtColor(res, cv2.COLOR_GRAY2BGR)
                     heatmap_image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
                 else:
                     heatmap_image = frame

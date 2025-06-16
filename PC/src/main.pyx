@@ -579,23 +579,45 @@ def just_miso_loop(q: JoinableQueue, running: Value):
 
 
 # Testing
+import cv2
+def camera_reader(q_yolo, q_viewer, running, src=0):
+    cap = cv2.VideoCapture(src)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+    while running.value:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        try:
+            q_yolo.put_nowait(frame)
+        except:
+            pass
+        try:
+            q_viewer.put_nowait(frame)
+        except:
+            pass
+    cap.release()
 
 def mimo():
     from lib.visual import Viewer
     import time
-    q_beam = JoinableQueue(maxsize=2)
-    q_yolo = None
+    v = Value('i', 1)
+    q_viewer = JoinableQueue(maxsize=2)
+    q_yolo = JoinableQueue(maxsize=2)
+    q_yolo_inference = None
+    cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, 0))
+    cam_proc.start()    
     using_yolo = False
     yolo_proc = None
-    v = Value('i', 1)
 
     if(True): # Change to False to disable YOLO
-        q_yolo = JoinableQueue(maxsize=2)
+        q_yolo_inference = JoinableQueue(maxsize=2)
         import sys
         sys.path.append("../image-detection")
         from run_object_oriented import yolo_model
         model = yolo_model("../image-detection/model/best.pt")
-        yolo_proc = Process(target=model.run_conf_n_inference, args=("../image-detection/footage/cordinate_drones.mp4", q_yolo, True, False))
+        yolo_proc = Process(target=model.run_conf_n_inference, args=(q_yolo, q_yolo_inference, True, False))
         yolo_proc.start()
         using_yolo = True
         
@@ -609,13 +631,13 @@ def mimo():
     try:
 
         producers = [
-            Process(target=producer, args=(q_beam, v))
+            Process(target=producer, args=(q_viewer, v))
             for _ in range(jobs)
         ]
 
         # daemon=True is important here
         consumers = [
-            Process(target=Viewer.loop, args=(viewer, q_beam, v, q_yolo), daemon=True)
+            Process(target=Viewer.loop, args=(viewer, q_viewer, v, q_yolo), daemon=True)
             for _ in range(jobs * 1)
         ]
 

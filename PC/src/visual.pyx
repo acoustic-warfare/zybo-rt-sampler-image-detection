@@ -189,10 +189,10 @@ from multiprocessing import JoinableQueue, Value
 class Viewer:
     def __init__(self, src="/dev/video2"):
         self.src = src
-        self.capture = cv2.VideoCapture(self.src)
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
-        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+        #self.capture = cv2.VideoCapture(self.src)
+        #self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
+        #self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
+        #self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
     def loop(self, q: JoinableQueue, v: Value, q2: JoinableQueue = None):
         """Threaded or Multiprocessing loop that should not be called by the user
@@ -218,7 +218,8 @@ class Viewer:
                 else:
                     yolo_frame = np.zeros_like(prev)
 
-                status, frame = self.capture.read()
+                frame = q.get(block=False)
+                q.task_done()
                 frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
                 try:
                     frame = cv2.resize(frame, WINDOW_DIMENSIONS)
