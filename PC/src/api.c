@@ -832,6 +832,24 @@ void get_data(float *out)
     semop(semid, &data_sem_wait, 1);
     memcpy(out, (void *)&rb->data[0], sizeof(float) * BUFFER_LENGTH);
     semop(semid, &data_sem_signal, 1);
+    int mic_idx[91] = {
+        4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, // 4-33
+        34, 35, 36, 37, 38, 39, 40, 41, // 34-41
+        48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, // 48-64
+        84, 85, 86, 87, 88, // 84-88
+        90, 91, 92, 93, 94, 95, 96, // 90-96
+        99, 100, 101, 102, 103, 104, // 99-104
+        106, 107, 108, 109, 110, 111, 112, // 106-112
+        137, // 137
+        145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164 // 145-164
+    };
+
+
+
+    int n_mic = 91;
+
+
+    disable_microphones(out, mic_idx, n_mic);
 }
 
 #endif
@@ -1077,6 +1095,26 @@ void miso_steer_listen(float *out, int *adaptive_array, int n, int steer_offset)
     get_data(&signals[0]);
 
     miso_pad(&signals[0], out, adaptive_array, n, steer_offset);
+}
+
+void disable_microphones(float *out, int *mic_indicies, int n_mic){
+
+
+    float *zero_arr = calloc(256, sizeof(float));
+
+
+    for(int i = 0; i < n_mic; i++){
+
+
+        int index = mic_indicies[i];
+
+
+        memcpy(&out[index*256], zero_arr, 256*sizeof(float));
+
+
+    }
+
+
 }
 
 // Local main for quick access

@@ -16,7 +16,7 @@
         "SAMPLE_RATE": 48828.0,
         "ELEMENT_DISTANCE": 0.02,
         "ARRAY_SEPARATION": 0.0,
-        "ACTIVE_ARRAYS": 4,
+        "ACTIVE_ARRAYS": 3,
         "SKIP_N_MICS": 1,
         "PROPAGATION_SPEED": 340.0,
         "APPLICATION_WINDOW_WIDTH": 720,

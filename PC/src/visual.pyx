@@ -194,33 +194,25 @@ class Viewer:
         #self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
         #self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
-    def loop(self, q: JoinableQueue, v: Value, q2: JoinableQueue = None):
+    def loop(self, q_power: JoinableQueue, v: Value, q_viewer: JoinableQueue = None, q_inference: JoinableQueue = None):
         """Threaded or Multiprocessing loop that should not be called by the user
 
         Args:
             q (JoinableQueue): FIFO containing the latest powermaps from the algorithm
             v (Value): a value that will stop this thread or process when other than 1
+            q2 (JoinableQueue, optional): FIFO containing YOLO processed frames
         """
         prev = np.zeros((1080, 1920, 3), dtype=np.uint8)
         self.MAX_X = MAX_ANGLE
-        self.MAX_Y = MAX_ANGLE /  ASPECT_RATIO
+        self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
         while v.value == 1:
             try:
-                output = q.get(block=False)
-                q.task_done()
-                yolo_frame = None
-                if q2 is not None:
-                    try:
-                        yolo_frame = q2.get(block=False)
-                        q2.task_done()
-                    except queue.Empty:
-                        yolo_frame = np.zeros_like(prev)  # fallback if no YOLO frame
-                else:
-                    yolo_frame = np.zeros_like(prev)
-
-                frame = q.get(block=False)
-                q.task_done()
-                frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
+                output = q_power.get(block=False)
+                q_power.task_done()
+                frame = q_viewer.get(block=False) if q_viewer is not None else None
+                if frame is None:
+                    frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
+                #frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
                 try:
                     frame = cv2.resize(frame, WINDOW_DIMENSIONS)
                 except cv2.error as e:
@@ -229,30 +221,32 @@ class Viewer:
                     break
 
                 res1, should_overlay = calculate_heatmap(output)
+
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
                 prev = res
 
                 if should_overlay:
-                    heatmap_image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
+                    image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
                 else:
-                    heatmap_image = frame
+                    image = frame
 
-                # Resize YOLO frame to match
-                if(np.any(yolo_frame)):
-                    yolo_frame = cv2.resize(yolo_frame, WINDOW_DIMENSIONS)
-                else:
-                    yolo_frame = np.zeros_like(heatmap_image)
+                # YOLO inference:
+                yolo_image = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
+                if q_inference is not None:
+                    try:
+                        yolo_frame = q_inference.get(block=False)
+                        q_inference.task_done()
+                        if yolo_frame is not None:
+                            yolo_image = cv2.resize(yolo_frame, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
+                    except queue.Empty:
+                        print("No YOLO frame received")
+                        pass
+                
 
-                # Combine side by side
-                combined = np.hstack((heatmap_image, yolo_frame))
-                display_size = (1280, 360)  # width, height you want for the window
-
-                if(np.any(yolo_frame)):
-                    combined_resized = cv2.resize(combined, display_size)
-                    cv2.imshow(APPLICATION_NAME, combined_resized)
-                else:
-                    cv2.imshow(APPLICATION_NAME, heatmap_image)
-
+                combined = np.hstack((image, yolo_image))
+                display_size = (1280, 360)  # width, height for the window
+                combined_resized = cv2.resize(combined, display_size)
+                cv2.imshow(APPLICATION_NAME, combined_resized)
 
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
                 cv2.waitKey(1)

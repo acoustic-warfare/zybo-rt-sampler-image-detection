@@ -580,15 +580,21 @@ def just_miso_loop(q: JoinableQueue, running: Value):
 
 # Testing
 import cv2
-def camera_reader(q_yolo, q_viewer, running, src=0):
+import time
+
+def camera_reader(q_yolo, q_viewer, running, src="..."):
     cap = cv2.VideoCapture(src)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30  # Get video FPS
+    frame_delay = 1.0 / fps  # Delay between frames
+    
     while running.value:
+        start_time = time.time()
+        
         ret, frame = cap.read()
         if not ret:
-            break
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Loop video
+            continue
+            
         try:
             q_yolo.put_nowait(frame)
         except:
@@ -597,16 +603,23 @@ def camera_reader(q_yolo, q_viewer, running, src=0):
             q_viewer.put_nowait(frame)
         except:
             pass
+            
+        # Control frame rate
+        elapsed = time.time() - start_time
+        if elapsed < frame_delay:
+            time.sleep(frame_delay - elapsed)
+    
     cap.release()
 
 def mimo():
     from lib.visual import Viewer
     import time
     v = Value('i', 1)
-    q_viewer = JoinableQueue(maxsize=2)
-    q_yolo = JoinableQueue(maxsize=2)
+    q_power = JoinableQueue(maxsize=2)
+    q_viewer = JoinableQueue(maxsize=10)
+    q_yolo = JoinableQueue(maxsize=10)
     q_yolo_inference = None
-    cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, 0))
+    cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/footage/cordinate_drones.mp4"))
     cam_proc.start()    
     using_yolo = False
     yolo_proc = None
@@ -616,7 +629,7 @@ def mimo():
         import sys
         sys.path.append("../image-detection")
         from run_object_oriented import yolo_model
-        model = yolo_model("../image-detection/model/best.pt")
+        model = yolo_model("/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best.pt")
         yolo_proc = Process(target=model.run_conf_n_inference, args=(q_yolo, q_yolo_inference, True, False))
         yolo_proc.start()
         using_yolo = True
@@ -631,13 +644,13 @@ def mimo():
     try:
 
         producers = [
-            Process(target=producer, args=(q_viewer, v))
+            Process(target=producer, args=(q_power, v))
             for _ in range(jobs)
         ]
 
         # daemon=True is important here
         consumers = [
-            Process(target=Viewer.loop, args=(viewer, q_viewer, v, q_yolo), daemon=True)
+            Process(target=viewer.loop, args=(q_power , v,q_viewer, q_yolo_inference), daemon=True)
             for _ in range(jobs * 1)
         ]
 
