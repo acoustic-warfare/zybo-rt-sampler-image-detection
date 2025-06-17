@@ -234,7 +234,7 @@ class Viewer:
                 yolo_image = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
                 if q_inference is not None:
                     try:
-                        yolo_frame = q_inference.get(block=False)
+                        yolo_frame = q_inference.get(timeout=0.2)
                         q_inference.task_done()
                         if yolo_frame is not None:
                             yolo_image = cv2.resize(yolo_frame, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)

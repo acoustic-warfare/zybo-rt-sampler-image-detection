@@ -629,7 +629,7 @@ def mimo():
         import sys
         sys.path.append("../image-detection")
         from run_object_oriented import yolo_model
-        model = yolo_model("/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best.pt")
+        model = yolo_model("/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/bestv8.pt")
         yolo_proc = Process(target=model.run_conf_n_inference, args=(q_yolo, q_yolo_inference, True, False))
         yolo_proc.start()
         using_yolo = True
