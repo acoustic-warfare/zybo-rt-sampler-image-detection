@@ -24,7 +24,7 @@ class yolo_model:
     def run_conf_n_inference(self, frame_queue, output_queue, stream=False, show=False):
         while True:
             try:
-                frame = frame_queue.get()  # get frame from camera_reader
+                frame_number, frame = frame_queue.get()  # get frame from camera_reader
                 frame_queue.task_done()  # Mark frame as processed
                 print(f"YOLO: Got frame with shape {frame.shape}")  # Debug print
             except Exception as e:
@@ -39,11 +39,11 @@ class yolo_model:
                     # Get the annotated frame with bounding boxes
                     output_frame = result.plot()
                     print("YOLO: putting frame in queue")
-                    output_queue.put(output_frame)
+                    output_queue.put((frame_number, output_frame))
                     break  # Only process first result for single frame
                     
             except Exception as e:
                 print(f"YOLO inference error: {e}")
                 # Put original frame if inference fails
-                output_queue.put(frame)
+                output_queue.put((frame_number, frame))
      

@@ -588,7 +588,7 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
     frame_delay = 1.0 / fps  # Delay between frames
     fourcc = cv2.VideoWriter_fourcc(*'XVID') #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
     out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480)) #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
-     
+    frame_number = 0
     while running.value:
         start_time = time.time()
         
@@ -600,15 +600,10 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Loop video
             continue
-            
-        try:
-            q_yolo.put_nowait(frame)
-        except:
-            pass
-        try:
-            q_viewer.put_nowait(frame)
-        except:
-            pass
+        # When producing frames:
+        frame_number += 1
+        q_viewer.put((frame_number, frame))
+        q_yolo.put((frame_number, frame))
             
         # Control frame rate
         elapsed = time.time() - start_time

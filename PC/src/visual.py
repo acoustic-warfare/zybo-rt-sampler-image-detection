@@ -8,7 +8,8 @@ from interface.config import *
 WINDOW_DIMENSIONS = (APPLICATION_WINDOW_WIDTH, APPLICATION_WINDOW_HEIGHT)
 WINDOW_DIMENSIONS = (1920,1080)
 APPLICATION_NAME = "Demo App"
-
+HEATMAP_COLOR = False
+NUM_WINDOWS = 1
 POWER = 5
 
 SRC = "/dev/video2" # This was our webcam
@@ -242,23 +243,25 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
     peak_y, peak_x = find_power_center(safe_image, region_size)
 
     # Find peak location using center of mass of high-power region
-    
-    if max_power_level > threshold:
-        # Create heatmap (your existing code)
-        img = np.log10(safe_image)
-        img -= np.log10(np.min(safe_image))
-        img /= np.max(img)
+    if HEATMAP_COLOR:
+        if max_power_level > threshold:
+            # Create heatmap (your existing code)
+            img = np.log10(safe_image)
+            img -= np.log10(np.min(safe_image))
+            img /= np.max(img)
+            should_overlay = True
+            
+            # Generate heatmap colors
+            for x in range(MAX_RES_X):
+                for y in range(MAX_RES_Y):
+                    power_level = img[x, y]
+                    if power_level >= amount:
+                        power_level -= amount
+                        power_level /= amount
+                        color_val = int(255 * power_level ** exponent)
+                        small_heatmap[MAX_RES_Y - 1 - y, MAX_RES_X - 1 - x] = colors[color_val]
+    else:
         should_overlay = True
-        
-        # Generate heatmap colors
-        for x in range(MAX_RES_X):
-            for y in range(MAX_RES_Y):
-                power_level = img[x, y]
-                if power_level >= amount:
-                    power_level -= amount
-                    power_level /= amount
-                    color_val = int(255 * power_level ** exponent)
-                    small_heatmap[MAX_RES_Y - 1 - y, MAX_RES_X - 1 - x] = colors[color_val]
     
     # Resize to window dimensions
     heatmap = cv2.resize(small_heatmap, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
@@ -364,7 +367,7 @@ class Front:
                     image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
                 else:
                     image = frame
-
+                
                 cv2.imshow(APPLICATION_NAME, image)
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
                 cv2.waitKey(1)
@@ -418,8 +421,25 @@ class Viewer:
         while v.value == 1:
             try:
                 output = q_power.get(block=False)
+                yolo_frame_num, yolo_frame = q_inference.get(timeout=0.2)
+                q_inference.task_done()
                 q_power.task_done()
-                frame = q_viewer.get(block=False) if q_viewer is not None else None
+                viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else None
+                while not (viewer_frame_num == yolo_frame_num):
+                    if viewer_frame_num < yolo_frame_num:
+                        # Viewer frame is older, skip it
+                        try:
+                            viewer_frame_num, frame = q_viewer.get(block=False)
+                            q_viewer.task_done()
+                        except queue.Empty:
+                            break
+                    else:
+                        # YOLO frame is older, skip it
+                        try:
+                            yolo_frame_num, yolo_frame = q_inference.get(block=False)
+                            q_inference.task_done()
+                        except queue.Empty:
+                            break
                 if frame is None:
                     frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
                 frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
@@ -444,19 +464,22 @@ class Viewer:
                 yolo_image = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
                 if q_inference is not None:
                     try:
-                        yolo_frame = q_inference.get(timeout=0.2)
-                        q_inference.task_done()
                         if yolo_frame is not None:
                             yolo_image = cv2.resize(yolo_frame, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
                     except queue.Empty:
                         print("No YOLO frame received")
                         pass
                 
-
-                combined = np.hstack((image, yolo_image))
-                display_size = (1280, 360)  # width, height for the window
-                combined_resized = cv2.resize(combined, display_size)
-                cv2.imshow(APPLICATION_NAME, combined_resized)
+                if NUM_WINDOWS == 2:
+                    combined = np.hstack((image, yolo_image))
+                    display_size = (1280, 360)  # width, height for the window
+                    combined_resized = cv2.resize(combined, display_size)
+                    cv2.imshow(APPLICATION_NAME, combined_resized)
+                elif NUM_WINDOWS == 1:
+                    combined = cv2.addWeighted(image, 0.7, yolo_image, 0.7, 0)
+                    display_size = (640, 360)  # width, height for the window
+                    combined_resized = cv2.resize(combined, display_size)
+                    cv2.imshow(APPLICATION_NAME, combined_resized)
 
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
                 cv2.waitKey(1)
