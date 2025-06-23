@@ -1,3 +1,4 @@
+import time
 from ultralytics import settings,YOLO
 class yolo_model:
     
@@ -20,12 +21,29 @@ class yolo_model:
             for conf in confidences:
                 print(f"Confidence: {conf:.2f}")
     
-    def run_conf_n_inference(self, source, q, stream=False, show=True):
-        for result in self.model(source=source, stream=stream, show=show):
-            confidences = result.boxes.conf.cpu().numpy()   
-            for conf in confidences:
-                print(f"Confidence: {conf:.2f}")
-                frame = result.plot()
-                print("YOLO: putting frame in queue")  # <-- ADD THIS
-
-                q.put(frame)            
+    def run_conf_n_inference(self, frame_queue, output_queue, stream=False, show=False):
+        while True:
+            try:
+                frame = frame_queue.get()  # get frame from camera_reader
+                frame_queue.task_done()  # Mark frame as processed
+                print(f"YOLO: Got frame with shape {frame.shape}")  # Debug print
+            except Exception as e:
+                print("No frame received:", e)
+                continue
+                
+            try:
+                results = self.run_inference(source=frame, stream=stream, show=show)
+                
+                # Process results and draw bounding boxes
+                for result in results:
+                    # Get the annotated frame with bounding boxes
+                    output_frame = result.plot()
+                    print("YOLO: putting frame in queue")
+                    output_queue.put(output_frame)
+                    break  # Only process first result for single frame
+                    
+            except Exception as e:
+                print(f"YOLO inference error: {e}")
+                # Put original frame if inference fails
+                output_queue.put(frame)
+     

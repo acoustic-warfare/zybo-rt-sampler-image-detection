@@ -582,15 +582,21 @@ def just_miso_loop(q: JoinableQueue, running: Value):
 import cv2
 import time
 
-def camera_reader(q_yolo, q_viewer, running, src="..."):
+def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
     cap = cv2.VideoCapture(src)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30  # Get video FPS
     frame_delay = 1.0 / fps  # Delay between frames
-    
+    fourcc = cv2.VideoWriter_fourcc(*'XVID') #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+    out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480)) #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+     
     while running.value:
         start_time = time.time()
         
         ret, frame = cap.read()
+        out.write(frame)#COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+        if not out.isOpened():
+            print("Error: Could not open video writer")
+        
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Loop video
             continue
@@ -608,8 +614,14 @@ def camera_reader(q_yolo, q_viewer, running, src="..."):
         elapsed = time.time() - start_time
         if elapsed < frame_delay:
             time.sleep(frame_delay - elapsed)
+        if elapsed > 10:
+            print("Exiting viewer")
+            running.value = 0
+            break
     
     cap.release()
+    out.release()  #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+
 
 def mimo():
     from lib.visual import Viewer
@@ -629,7 +641,7 @@ def mimo():
         import sys
         sys.path.append("../image-detection")
         from run_object_oriented import yolo_model
-        model = yolo_model("/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/bestv8.pt")
+        model = yolo_model("/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt")
         yolo_proc = Process(target=model.run_conf_n_inference, args=(q_yolo, q_yolo_inference, True, False))
         yolo_proc.start()
         using_yolo = True
@@ -639,7 +651,7 @@ def mimo():
     producer = b
     jobs = 1
     viewer = Viewer()
-    connect()
+    connect(replay_mode=True)
 
     try:
 

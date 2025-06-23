@@ -182,6 +182,99 @@ def calculate_heatmap2(img):
 
     return heatmap
 
+def find_power_center(image, region_size=3):
+    """Find center with OpenCV Gaussian smoothing"""
+    # Convert to float32 for OpenCV processing
+    image_f32 = image.astype(np.float32)
+    
+    # Apply Gaussian blur (kernel size should be odd)
+    kernel_size = 5  # Adjust for more/less smoothing
+    smoothed = cv2.GaussianBlur(image_f32, (kernel_size, kernel_size), sigmaX=1.0, sigmaY=1.0)
+    
+    max_val = np.max(smoothed)
+    threshold = max_val * 0.95
+    high_power_mask = smoothed >= threshold
+    
+    if np.sum(high_power_mask) > 0:
+        y_indices, x_indices = np.indices(smoothed.shape)
+        
+        # Use cubed power for strong weighting
+        weights = (smoothed ** 3) * high_power_mask
+        total_weight = np.sum(weights)
+        
+        if total_weight > 0:
+            center_x = np.sum(x_indices * weights) / total_weight
+            center_y = np.sum(y_indices * weights) / total_weight
+            return center_x, center_y
+    
+    # Fallback
+    peak_idx = np.unravel_index(np.argmax(smoothed), smoothed.shape)
+    return peak_idx[1], peak_idx[0]
+
+def calculate_heatmap_with_detection(image, box_size_ratio=0.1):
+    """Create a heatmap with bounding box around detected object using calculate_heatmap as basis"""
+    
+    peak_x, peak_y = find_power_center(image)
+    # Debug: Also find the raw peak for comparison
+    lmax = np.max(image)
+    
+    image /= lmax
+
+
+    small_heatmap = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.uint8)
+    # small_heatmap = np.zeros((MAX_RES_X, MAX_RES_Y, 3), dtype=np.uint8)
+
+    should_overlay = False
+    if lmax > 1e-8:
+        should_overlay = True
+        for x in range(MAX_RES_X):
+            for y in range(MAX_RES_Y):
+                d = image[x, y]
+
+                if d > 0.9:
+                    val = int(255 * d ** MISO_POWER)
+
+                    # small_heatmap[y, MAX_RES_X - 1 - x] = colors[val]
+                    small_heatmap[MAX_RES_Y - 1 - y, x] = colors[val]
+                    # small_heatmap[x, y] = colors[val]
+
+    # cv2.imshow()
+
+    # small_heatmap = np.reshape(small_heatmap, (MAX_RES_Y, MAX_RES_X, 3))
+
+    heatmap = cv2.resize(small_heatmap, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
+    # heatmap = cv2.resize(small_heatmap, (1000, 1000), interpolation=cv2.INTER_NEAREST)
+    
+    ACTUAL_DISPLAY_SIZE = (1280, 360)
+    # Draw bounding box around detected object
+    if should_overlay:
+    
+        
+        window_x = ACTUAL_DISPLAY_SIZE[0] - 1 - int(peak_x / (MAX_RES_X - 1) * ACTUAL_DISPLAY_SIZE[0])
+        window_y = ACTUAL_DISPLAY_SIZE[1] - 1 - int(peak_y / (MAX_RES_Y - 1) * ACTUAL_DISPLAY_SIZE[1])
+        
+        # Calculate box size based on ACTUAL display
+        box_width = int(ACTUAL_DISPLAY_SIZE[0] * box_size_ratio)
+        box_height = int(ACTUAL_DISPLAY_SIZE[1] * box_size_ratio)
+        
+        # Calculate box corners
+        x1 = max(0, window_x - box_width // 2)
+        y1 = max(0, window_y - box_height // 2)
+        x2 = min(ACTUAL_DISPLAY_SIZE[0], window_x + box_width // 2)
+        y2 = min(ACTUAL_DISPLAY_SIZE[1], window_y + box_height // 2)
+        
+        # Draw bounding box BEFORE the final resize
+        cv2.rectangle(heatmap, (x1, y1), (x2, y2), (255, 0, 255), 3)  # Purple box
+        cv2.circle(heatmap, (window_x, window_y), 5, (0, 0, 255), -1)  # Red center
+        print(f"Peak at: ({peak_x}, {peak_y}) -> ({window_x}, {window_y})")
+
+        
+        # Add confidence text
+        confidence = max_power_level / threshold if threshold > 0 else 1.0
+        cv2.putText(heatmap, f"Conf: {confidence:.2f}", 
+                   (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+    
+    return heatmap, should_overlay
 import queue
 from multiprocessing import JoinableQueue, Value
 
@@ -212,7 +305,7 @@ class Viewer:
                 frame = q_viewer.get(block=False) if q_viewer is not None else None
                 if frame is None:
                     frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
-                #frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
+                frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
                 try:
                     frame = cv2.resize(frame, WINDOW_DIMENSIONS)
                 except cv2.error as e:
@@ -220,7 +313,7 @@ class Viewer:
                     v.value = 0
                     break
 
-                res1, should_overlay = calculate_heatmap(output)
+                res1, should_overlay = calculate_heatmap_with_detection(output)
 
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
                 prev = res
