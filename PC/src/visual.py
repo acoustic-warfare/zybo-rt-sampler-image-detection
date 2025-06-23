@@ -429,14 +429,14 @@ class Viewer:
                     if viewer_frame_num < yolo_frame_num:
                         # Viewer frame is older, skip it
                         try:
-                            viewer_frame_num, frame = q_viewer.get(block=False)
+                            viewer_frame_num, frame = q_viewer.get(timeout=0.2)
                             q_viewer.task_done()
                         except queue.Empty:
                             break
                     else:
                         # YOLO frame is older, skip it
                         try:
-                            yolo_frame_num, yolo_frame = q_inference.get(block=False)
+                            yolo_frame_num, yolo_frame = q_inference.get(timeout=0.2)
                             q_inference.task_done()
                             
                         except queue.Empty:
