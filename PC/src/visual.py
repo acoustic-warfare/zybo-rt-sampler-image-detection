@@ -438,6 +438,7 @@ class Viewer:
                         try:
                             yolo_frame_num, yolo_frame = q_inference.get(block=False)
                             q_inference.task_done()
+                            
                         except queue.Empty:
                             break
                 if frame is None:
@@ -476,9 +477,12 @@ class Viewer:
                     combined_resized = cv2.resize(combined, display_size)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
                 elif NUM_WINDOWS == 1:
-                    combined = cv2.addWeighted(image, 0.7, yolo_image, 0.7, 0)
                     display_size = (640, 360)  # width, height for the window
+                    yolo_image = cv2.flip(yolo_image, 1)  # Flip YOLO frame
+                    #image_resized = cv2.resize(image, display_size, interpolation=cv2.INTER_LINEAR)
+                    combined = cv2.addWeighted(image, 0.7, yolo_image, 0.7, 0)
                     combined_resized = cv2.resize(combined, display_size)
+                    combined_resized = cv2.flip(combined_resized, 1)  # Flip combined image
                     cv2.imshow(APPLICATION_NAME, combined_resized)
 
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
