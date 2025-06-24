@@ -359,7 +359,6 @@ class Front:
                     break
 
                 res1, should_overlay = calculate_heatmap(output, threshold=0)
-
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
                 prev = res
 
@@ -458,7 +457,8 @@ class Viewer:
 
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
                 prev = res
-
+                if HEATMAP_COLOR == False:
+                    powerlevel_box = res1
                 if should_overlay:
                     image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
                 else:
@@ -480,12 +480,7 @@ class Viewer:
                     combined_resized = cv2.resize(combined, display_size)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
                 elif NUM_WINDOWS == 1:
-                    display_size = (640, 360)  # width, height for the window
-                    yolo_image = cv2.flip(yolo_image, 1)  # Flip YOLO frame
-                    #image_resized = cv2.resize(image, display_size, interpolation=cv2.INTER_LINEAR)
-                    combined = cv2.addWeighted(image, 0.7, yolo_image, 0.7, 0)
-                    combined_resized = cv2.resize(combined, display_size)
-                    combined_resized = cv2.flip(combined_resized, 1)  # Flip combined image
+                    combined_resized = decider.create_image(image, yolo_image, powerlevel_box)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
 
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
