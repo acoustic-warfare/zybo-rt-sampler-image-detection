@@ -630,6 +630,8 @@ def mimo():
     cam_proc.start()    
     using_yolo = False
     yolo_proc = None
+    
+
 
     if(True): # Change to False to disable YOLO
         q_yolo_inference = JoinableQueue(maxsize=2)

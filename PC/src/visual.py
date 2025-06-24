@@ -415,6 +415,9 @@ class Viewer:
             v (Value): a value that will stop this thread or process when other than 1
             q2 (JoinableQueue, optional): FIFO containing YOLO processed frames
         """
+        from sensorfusion.decider import sensorfusiondecider
+
+        decider = sensorfusiondecider()
         prev = np.zeros((1080, 1920, 3), dtype=np.uint8)
         self.MAX_X = MAX_ANGLE
         self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
