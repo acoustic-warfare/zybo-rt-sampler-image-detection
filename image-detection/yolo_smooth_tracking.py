@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from sort import Sort  # Ensure you have the SORT tracker installed: pip install sort
 
 
 class yolo_model:
@@ -15,7 +16,7 @@ class yolo_model:
             for i in range(len(boxes)):
                 xyxy = boxes.xyxy[i].cpu().numpy()  # [x1, y1, x2, y2]
                 conf = boxes.conf[i].item()
-                if conf >= conf_threshold:
+                if conf >= conf_threshold:  
                     all_boxes.append([*xyxy, conf])
         return all_boxes
 
@@ -145,8 +146,8 @@ def process_video(frame_queue, output_queue, stream=False, show=False, model_pat
 
 def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None):
     detector = yolo_model(model_path)
-    confh = 0.5
-    confl = 0.1
+    confh = 0.7
+    confl = 0.3
     iou_thresh = 0.5
     corr_thresh = 0.8
 
@@ -222,6 +223,98 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
         except Exception as e:
             print(f"YOLO tracking error: {e}")
             output_queue.put((frame_number, blank))
+
+
+def process_video_track(video_path, model_path, rec=True):
+    detector = yolo_model(model_path)
+    cap = cv2.VideoCapture(video_path)
+    tracker = Sort()  # Initialize SORT tracker
+
+    if rec:
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+        if fps == 0:
+            fps = 25
+
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter("output3.mp4", fourcc, fps, (width, height))
+
+    confh = 0.7
+    confl = 0.3
+    iou_thresh = 0.5
+    corr_thresh = 0.8
+
+    prev_frame = None
+    prev_detections = []
+    frame_count = 0
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame_count += 1
+        if frame_count % 2 != 0:
+            continue
+
+        detections = detector.get_detections(frame, conf_threshold=confl)
+        valid = [d for d in detections if d[4] > confh]
+        candidates = [d for d in detections if confl < d[4] <= confh]
+
+        # Prepare detections for SORT: [x1, y1, x2, y2, conf]
+        dets = np.array(valid + candidates)
+        if len(dets) == 0:
+            dets = np.empty((0, 5))
+
+        # Update tracker and get tracks: [x1, y1, x2, y2, track_id]
+        tracks = tracker.update(dets)
+
+        # Draw tracked boxes with IDs
+        for track in tracks:
+            x1, y1, x2, y2, track_id = track.astype(int)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(
+                frame,
+                f"ID:{track_id}",
+                (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 0),
+                2,
+            )
+
+        # Optionally, fallback to your correlation logic if no valid detections
+        if len(valid) == 0 and len(candidates) > 0 and prev_frame is not None:
+            for cand in candidates:
+                for prev in prev_detections:
+                    pred_box, corr_score = track_with_correlation(
+                        prev_frame, frame, prev[:4]
+                    )
+                    iou = compute_iou(pred_box, cand[:4])
+                    if iou > iou_thresh or corr_score > corr_thresh:
+                        cand[4] = confh  # Boost confidence
+                        break
+                else:
+                    cand[4] = 0  # Consider lost
+
+        prev_detections = [d for d in detections if d[4] >= confh]
+        prev_frame = frame.copy()
+
+        if rec:
+            out.write(frame)
+        cv2.imshow("Frame", frame)
+        if cv2.waitKey(1) == 27:
+            break
+
+    if rec:
+        out.release()
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+
 
 if __name__ == "__main__":
 
