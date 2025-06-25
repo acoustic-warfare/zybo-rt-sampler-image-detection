@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from sort import Sort  # Ensure you have the SORT tracker installed: pip install sort
+from sort.sort import (
+    Sort,
+)  # Ensure you have the SORT tracker installed: pip install sort
 
 
 class yolo_model:
@@ -16,7 +18,7 @@ class yolo_model:
             for i in range(len(boxes)):
                 xyxy = boxes.xyxy[i].cpu().numpy()  # [x1, y1, x2, y2]
                 conf = boxes.conf[i].item()
-                if conf >= conf_threshold:  
+                if conf >= conf_threshold:
                     all_boxes.append([*xyxy, conf])
         return all_boxes
 
@@ -99,8 +101,13 @@ def process_video(frame_queue, output_queue, stream=False, show=False, model_pat
                     label = f"{conf:.2f}"
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(
-                        frame, label, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
+                        frame,
+                        label,
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (0, 255, 0),
+                        2,
                     )
                 if show:
                     cv2.imshow("Frame", frame)
@@ -131,8 +138,13 @@ def process_video(frame_queue, output_queue, stream=False, show=False, model_pat
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
                 label = f"{conf:.2f}"
                 cv2.putText(
-                    frame, label, (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2
+                    frame,
+                    label,
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 0, 0),
+                    2,
                 )
             if show:
                 cv2.imshow("Frame", frame)
@@ -144,7 +156,10 @@ def process_video(frame_queue, output_queue, stream=False, show=False, model_pat
             print(f"YOLO tracking error: {e}")
             output_queue.put((frame_number, frame))
 
-def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None):
+
+def process_video_boxes_only(
+    frame_queue, output_queue, stream=False, show=False, model_path=None
+):
     detector = yolo_model(model_path)
     confh = 0.7
     confl = 0.3
@@ -179,8 +194,13 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
                     label = f"{conf:.2f}"
                     cv2.rectangle(blank, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(
-                        blank, label, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
+                        blank,
+                        label,
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (0, 255, 0),
+                        2,
                     )
                 if show:
                     cv2.imshow("Boxes Only", blank)
@@ -211,8 +231,13 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
                 cv2.rectangle(blank, (x1, y1), (x2, y2), (255, 0, 0), 2)
                 label = f"{conf:.2f}"
                 cv2.putText(
-                    blank, label, (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2
+                    blank,
+                    label,
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 0, 0),
+                    2,
                 )
             if show:
                 cv2.imshow("Boxes Only", blank)
@@ -314,11 +339,10 @@ def process_video_track(video_path, model_path, rec=True):
     cv2.destroyAllWindows()
 
 
-
-
 if __name__ == "__main__":
 
-    process_video(
+    process_video_track(
         "../test_footage/video/flera_dron.mp4",
         "runs/detect/train4/weights/best_of_all.pt",
+        rec=False,
     )
