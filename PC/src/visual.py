@@ -235,6 +235,7 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
     
     should_overlay = False
     small_heatmap = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.uint8)
+    power_detection = np.zeros((MAX_RES_Y, MAX_RES_X), dtype=np.float32)
     
     max_power_level = np.max(image)
     if image.ndim == 3:
@@ -242,29 +243,26 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
     safe_image = np.clip(image, 1e-12, None)
     peak_y, peak_x = find_power_center(safe_image, region_size)
 
-    # Find peak location using center of mass of high-power region
-    if HEATMAP_COLOR:
-        if max_power_level > threshold:
-            # Create heatmap (your existing code)
-            img = np.log10(safe_image)
-            img -= np.log10(np.min(safe_image))
-            img /= np.max(img)
-            should_overlay = True
-            
-            # Generate heatmap colors
-            for x in range(MAX_RES_X):
-                for y in range(MAX_RES_Y):
-                    power_level = img[x, y]
-                    if power_level >= amount:
-                        power_level -= amount
-                        power_level /= amount
-                        color_val = int(255 * power_level ** exponent)
-                        small_heatmap[MAX_RES_Y - 1 - y, MAX_RES_X - 1 - x] = colors[color_val]
-    else:
+    if max_power_level > threshold:
+        # Create heatmap (your existing code)
+        img = np.log10(safe_image)
+        img -= np.log10(np.min(safe_image))
+        img /= np.max(img)
         should_overlay = True
+        
+        # Generate heatmap colors
+        for x in range(MAX_RES_X):
+            for y in range(MAX_RES_Y):
+                power_level = img[x, y]
+                if power_level >= amount:
+                    power_level -= amount
+                    power_level /= amount
+                    color_val = int(255 * power_level ** exponent)
+                    small_heatmap[MAX_RES_Y - 1 - y, MAX_RES_X - 1 - x] = colors[color_val]
     
     # Resize to window dimensions
     heatmap = cv2.resize(small_heatmap, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
+    power_detection = cv2.resize(power_detection, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
     ACTUAL_DISPLAY_SIZE = WINDOW_DIMENSIONS 
     if should_overlay:
         
@@ -285,16 +283,13 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
         y2 = min(ACTUAL_DISPLAY_SIZE[1], scaled_window_y + box_height // 2)
 
         # Draw bounding box for debugging
-        cv2.rectangle(heatmap, (x1, y1), (x2, y2), (255, 0, 255), 3)  # Purple box
-        cv2.circle(heatmap, (scaled_window_x, scaled_window_y), 5, (0, 0, 255), -1)  # Red center
+        cv2.rectangle(power_detection, (x1, y1), (x2, y2), (255, 0, 255), 3)  # Purple box
+        cv2.circle(power_detection, (scaled_window_x, scaled_window_y), 5, (0, 0, 255), -1)  # Red center
 
         
-        # Add confidence text
-        confidence = max_power_level / threshold if threshold > 0 else 1.0
-        cv2.putText(heatmap, f"Conf: {confidence:.2f}", 
-                   (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+        
     
-    return heatmap, should_overlay
+    return power_detection, heatmap, should_overlay
 
 def find_power_center(image, region_size=3):
     """Find center with OpenCV Gaussian smoothing"""
@@ -453,13 +448,11 @@ class Viewer:
                     v.value = 0
                     break
 
-                res1, should_overlay = calculate_heatmap_with_detection(output)
+                powerlevel_box, res1, should_overlay = calculate_heatmap_with_detection(output)
 
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
                 prev = res
-                if HEATMAP_COLOR == False:
-                    powerlevel_box = res1
-                if should_overlay:
+                if HEATMAP_COLOR:
                     image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
                 else:
                     image = frame
@@ -480,7 +473,7 @@ class Viewer:
                     combined_resized = cv2.resize(combined, display_size)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
                 elif NUM_WINDOWS == 1:
-                    combined_resized = decider.create_image(image, yolo_image, powerlevel_box)
+                    combined_resized = decider.create_image(image, yolo_image, powerlevel_box, res)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
 
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
