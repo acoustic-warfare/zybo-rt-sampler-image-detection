@@ -577,7 +577,15 @@ def just_miso_loop(q: JoinableQueue, running: Value):
         except KeyboardInterrupt:
             running.value = 0
 
+import os
 
+def get_unique_filename(base_name="output", ext=".mp4"):
+    i = 1
+    filename = f"{base_name}{ext}"
+    while os.path.exists(filename):
+        filename = f"{base_name}_{i}{ext}"
+        i += 1
+    return filename
 # Testing
 import cv2
 import time
@@ -586,8 +594,10 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
     cap = cv2.VideoCapture(src)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30  # Get video FPS
     frame_delay = 1.0 / fps  # Delay between frames
-    fourcc = cv2.VideoWriter_fourcc(*'XVID') #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
-    out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480)) #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+    filename = get_unique_filename("output", ".mp4")
+
+    out = cv2.VideoWriter('recordings/'+filename, fourcc, 20.0, (640, 360)) #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
     frame_number = 0
     while running.value:
         start_time = time.time()
@@ -613,7 +623,7 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
             print("Exiting viewer")
             running.value = 0
             break
-    
+    print("Exiting camera reader")
     cap.release()
     out.release()  #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
 
@@ -646,7 +656,7 @@ def mimo():
     
     producer = b
     jobs = 1
-    viewer = Viewer()
+    viewer = Viewer(cb=stear_miso_beam)
     connect(replay_mode=True)
 
     try:

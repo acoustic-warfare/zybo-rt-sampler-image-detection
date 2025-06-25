@@ -152,6 +152,7 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
 
     prev_frame = None
     prev_detections = []
+    int
 
     while True:
         try:
@@ -161,6 +162,7 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
             print("No frame received:", e)
             continue
 
+        
         try:
             # Create a blank image with the same shape as the input frame
             blank = np.zeros_like(frame)

@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 class sensorfusiondecider:
     def __init__(self):
-        self.hej = 0
+        self.display_size = (640, 360)
         
     def get_lightlevel(self, image):
         # Convert the image to grayscale
@@ -21,11 +21,10 @@ class sensorfusiondecider:
         return confidence
         
     def create_image(self, image, yolo_image, power_image, heatmap):
-        display_size = (640, 360)
 
         # Ensure all images are 3-channel and same size
         def ensure_shape(img):
-            img = cv2.resize(img, display_size)
+            img = cv2.resize(img, self.display_size)
             if len(img.shape) == 2:
                 img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
             if img.dtype != np.uint8:
