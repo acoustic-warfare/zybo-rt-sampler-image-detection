@@ -232,7 +232,7 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
         box_size_ratio: Size of bounding box as ratio of image size
         region_size: Size of region to consider for center-of-mass calculation
     """
-    
+
     should_overlay = False
     small_heatmap = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.uint8)
     power_detection = np.zeros((MAX_RES_Y, MAX_RES_X), dtype=np.float32)
@@ -285,6 +285,7 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
         # Draw bounding box for debugging
         cv2.rectangle(power_detection, (x1, y1), (x2, y2), (255, 0, 255), 3)  # Purple box
         cv2.circle(power_detection, (scaled_window_x, scaled_window_y), 5, (0, 0, 255), -1)  # Red center
+        # Store coordinates in rectangle_coords_conf
 
         
         
@@ -411,14 +412,15 @@ class Viewer:
         """
         from sensorfusion.decider import sensorfusiondecider
 
-        decider = sensorfusiondecider()
         prev = np.zeros((1080, 1920, 3), dtype=np.uint8)
         self.MAX_X = MAX_ANGLE
         self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
+        decider = sensorfusiondecider((640, 360), MAX_ANGLE=MAX_ANGLE, ASPECT_RATIO=ASPECT_RATIO)
+        
         while v.value == 1:
             try:
-                output = q_power.get(block=False)
-                yolo_frame_num, yolo_frame = q_inference.get(timeout=0.2)
+                yolo_frame_num, yolo_frame, conf = q_inference.get()
+                output = q_power.get()
                 q_inference.task_done()
                 q_power.task_done()
                 viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else None
@@ -474,6 +476,8 @@ class Viewer:
                     cv2.imshow(APPLICATION_NAME, combined_resized)
                 elif NUM_WINDOWS == 1:
                     combined_resized = decider.create_image(image, yolo_image, powerlevel_box, res)
+                    if len(combined_resized.shape) == 2:
+                        combined_resized = cv2.cvtColor(combined_resized, cv2.COLOR_GRAY2BGR)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
 
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)

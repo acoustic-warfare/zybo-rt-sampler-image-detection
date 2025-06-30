@@ -1,8 +1,11 @@
 import cv2
 import numpy as np
 class sensorfusiondecider:
-    def __init__(self):
-        self.display_size = (640, 360)
+    def __init__(self, display_size=(640, 360), MAX_ANGLE=30, ASPECT_RATIO=16/9):
+        self.display_size = display_size
+        self.image_confidence_threshold = 0.5
+        self.MAX_X = MAX_ANGLE
+        self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
         
     def get_lightlevel(self, image):
         # Convert the image to grayscale
@@ -63,4 +66,24 @@ class sensorfusiondecider:
 
         
         return image, yolo_image, power_image
+    
+    def focus_beam(self, callback, box):
+        x1, y1, x2, y2, conf = box
+        if conf < self.image_confidence_threshold:
+            print("Low confidence, not focusing beam")
+            return -1, -1
+        else:
+            x_mid = (x1 + x2) / 2
+            y_mid = (y1 + y2) / 2
+            horizontal = (x_mid / self.display_size[0]) * self.MAX_X * 2 - self.MAX_X
+            vertical = (y_mid / self.display_size[1]) * self.MAX_Y * 2 - self.MAX_Y
+            callback(horizontal, vertical)
+
+
+
+            # # steer(-horizontal, vertical)
+            # print(f"{horizontal}, {vertical}")
+            # self.cb(horizontal, vertical)
+
+        return 0
 

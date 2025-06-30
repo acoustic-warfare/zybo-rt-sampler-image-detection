@@ -579,37 +579,60 @@ def just_miso_loop(q: JoinableQueue, running: Value):
 
 import os
 
-def get_unique_filename(base_name="output", ext=".mp4"):
+def get_unique_filename(base_name="output", ext=".mp4", directory="recordings"):
     i = 1
+    if not os.path.exists(directory):
+        os.makedirs(directory)
     filename = f"{base_name}{ext}"
-    while os.path.exists(filename):
+    full_path = os.path.join(directory, filename)
+    while os.path.exists(full_path):
         filename = f"{base_name}_{i}{ext}"
+        full_path = os.path.join(directory, filename)
         i += 1
-    return filename
+    return full_path
+
+
 # Testing
 import cv2
 import time
+import pyshark
+
+
+def udp_capture_to_pcap(output_file="udp_capture.pcap", interface="enp0s31f6"):
+    import subprocess
+    # Save only UDP packets
+    cmd = [
+        "tshark",
+        "-i", interface,
+        "-f", "udp",             # Capture filter: only UDP
+        "-w", output_file        # Output file
+    ]
+    print(f"Starting UDP capture on {interface} to {output_file}")
+    subprocess.run(cmd)  # This blocks until interrupted
 
 def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
     cap = cv2.VideoCapture(src)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30  # Get video FPS
     frame_delay = 1.0 / fps  # Delay between frames
     fourcc = cv2.VideoWriter_fourcc(*'mp4v') #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
-    filename = get_unique_filename("output", ".mp4")
+    filename = get_unique_filename("output", ".mp4", "recordings")
 
-    out = cv2.VideoWriter('recordings/'+filename, fourcc, 20.0, (640, 360)) #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+
+    #out = cv2.VideoWriter(filename, fourcc, 20.0, (640, 360)) #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
     frame_number = 0
     while running.value:
         start_time = time.time()
         
         ret, frame = cap.read()
-        out.write(frame)#COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
-        if not out.isOpened():
-            print("Error: Could not open video writer")
-        
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Loop video
+            print("No frame captured, resetting video capture")
             continue
+        frame = cv2.resize(frame, (640, 360))
+        #out.write(frame)#COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+        #if not out.isOpened():
+            #print("Error: Could not open video writer")
+        
         # When producing frames:
         frame_number += 1
         q_viewer.put((frame_number, frame))
@@ -625,7 +648,7 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
             break
     print("Exiting camera reader")
     cap.release()
-    out.release()  #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+    #out.release()  #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
 
 
 def mimo():
@@ -636,7 +659,9 @@ def mimo():
     q_viewer = JoinableQueue(maxsize=10)
     q_yolo = JoinableQueue(maxsize=10)
     q_yolo_inference = None
-    cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/footage/cordinate_drones.mp4"))
+    source = "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/footage/Video.mov"
+    #source = "/dev/video0"  # Use a camera as source, change to your camera device
+    cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, source))
     cam_proc.start()    
     using_yolo = False
     yolo_proc = None
@@ -656,7 +681,7 @@ def mimo():
     
     producer = b
     jobs = 1
-    viewer = Viewer(cb=stear_miso_beam)
+    viewer = Viewer()
     connect(replay_mode=True)
 
     try:
@@ -671,7 +696,8 @@ def mimo():
             Process(target=viewer.loop, args=(q_power , v,q_viewer, q_yolo_inference), daemon=True)
             for _ in range(jobs * 1)
         ]
-
+        filename = get_unique_filename("udp_capture", ".pcap", "recordings")
+        #udp_proc = Process(target=udp_capture_to_pcap, args=(filename, "enp0s31f6"), daemon=True) 
         # + order here doesn't matter
         for p in consumers + producers:
             p.start()
@@ -681,6 +707,8 @@ def mimo():
         if(using_yolo):
             if(yolo_proc.is_alive()):
                 yolo_proc.join()
+        #udp_proc.start()
+        #udp_proc.join()
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
