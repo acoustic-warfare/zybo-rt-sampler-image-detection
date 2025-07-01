@@ -33,7 +33,10 @@
 *.app
 
 *.pcap
+*.pcapng
 *.avi
+*.npy
+*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -44,3 +47,7 @@ PC/lib/
 
 #Virtual environments
 venv/
+
+#Image detection files
+image-detection/model/*
+image-detection/footage/*
