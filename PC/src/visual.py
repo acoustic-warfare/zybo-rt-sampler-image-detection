@@ -235,7 +235,7 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
 
     should_overlay = False
     small_heatmap = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.uint8)
-    power_detection = np.zeros((MAX_RES_Y, MAX_RES_X), dtype=np.float32)
+    power_detection = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.float32)
     
     max_power_level = np.max(image)
     if image.ndim == 3:
@@ -411,35 +411,30 @@ class Viewer:
             q2 (JoinableQueue, optional): FIFO containing YOLO processed frames
         """
         from sensorfusion.decider import sensorfusiondecider
-
         prev = np.zeros((1080, 1920, 3), dtype=np.uint8)
         self.MAX_X = MAX_ANGLE
         self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
         decider = sensorfusiondecider((640, 360), MAX_ANGLE=MAX_ANGLE, ASPECT_RATIO=ASPECT_RATIO)
-        
         while v.value == 1:
             try:
                 yolo_frame_num, yolo_frame, conf = q_inference.get()
-                output = q_power.get()
+                output, power_frame_number = q_power.get()
                 q_inference.task_done()
                 q_power.task_done()
                 viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else None
-                while not (viewer_frame_num == yolo_frame_num):
-                    if viewer_frame_num < yolo_frame_num:
-                        # Viewer frame is older, skip it
-                        try:
-                            viewer_frame_num, frame = q_viewer.get(timeout=0.2)
-                            q_viewer.task_done()
-                        except queue.Empty:
-                            break
-                    else:
-                        # YOLO frame is older, skip it
-                        try:
-                            yolo_frame_num, yolo_frame = q_inference.get(timeout=0.2)
-                            q_inference.task_done()
-                            
-                        except queue.Empty:
-                            break
+                q_viewer.task_done()
+                print(f"Viewer frame: {viewer_frame_num}, Yolo frame: {yolo_frame_num}, Power frame: {power_frame_number}")
+                # while not (abs(viewer_frame_num - yolo_frame_num) < 5 and abs(viewer_frame_num - power_frame_number) < 5):
+                #     if viewer_frame_num < yolo_frame_num | viewer_frame_num < power_frame_number:
+                #         viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else (None, None)
+                #         q_viewer.task_done()
+                #     elif yolo_frame_num < power_frame_number | yolo_frame_num < viewer_frame_num:
+                #         yolo_frame_num, yolo_frame, conf = q_inference.get(block=False)
+                #         q_inference.task_done()
+                #     elif power_frame_number < viewer_frame_num | power_frame_number < yolo_frame_num:
+                #         output, power_frame_number = q_power.get(block=False)
+                #         q_power.task_done()
+                    
                 if frame is None:
                     frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
                 frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(

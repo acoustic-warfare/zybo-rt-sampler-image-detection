@@ -49,5 +49,5 @@ PC/lib/
 venv/
 
 #Image detection files
-../image-detection/model/*
-../image-detection/footage/*
+image-detection/model/*
+image-detection/footage/*

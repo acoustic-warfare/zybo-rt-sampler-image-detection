@@ -149,10 +149,10 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
     confl = 0.1
     iou_thresh = 0.5
     corr_thresh = 0.8
+    rectangle_coords_conf = [[0, 0], [0, 0], 0]
 
     prev_frame = None
     prev_detections = []
-    int
 
     while True:
         try:
@@ -166,6 +166,8 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
         try:
             # Create a blank image with the same shape as the input frame
             blank = np.zeros_like(frame)
+            if len(blank.shape) == 2:
+                blank = cv2.cvtColor(blank, cv2.COLOR_GRAY2BGR)
 
             detections = detector.get_detections(frame, conf_threshold=confl)
             valid = [d for d in detections if d[4] > confh]
@@ -177,6 +179,9 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
                 for box in valid:
                     x1, y1, x2, y2 = map(int, box[:4])
                     conf = box[4]
+                    rectangle_coords_conf[0] = [x1, y1]
+                    rectangle_coords_conf[1] = [x2, y2]
+                    rectangle_coords_conf[2] = conf
                     label = f"{conf:.2f}"
                     cv2.rectangle(blank, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(
@@ -187,7 +192,12 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
                     cv2.imshow("Boxes Only", blank)
                     if cv2.waitKey(1) == 27:
                         break
-                output_queue.put((frame_number, blank))
+                if output_queue.full():
+                    try:
+                        output_queue.get_nowait()  # Remove old frame
+                    except:
+                        pass
+                output_queue.put((frame_number, blank, rectangle_coords_conf))
                 continue
 
             # If no valid detections, process candidates
@@ -209,6 +219,9 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
             for box in prev_detections:
                 x1, y1, x2, y2 = map(int, box[:4])
                 conf = box[4]
+                rectangle_coords_conf[0] = [x1, y1]
+                rectangle_coords_conf[1] = [x2, y2]
+                rectangle_coords_conf[2] = conf
                 cv2.rectangle(blank, (x1, y1), (x2, y2), (255, 0, 0), 2)
                 label = f"{conf:.2f}"
                 cv2.putText(
@@ -219,11 +232,16 @@ def process_video_boxes_only(frame_queue, output_queue, stream=False, show=False
                 cv2.imshow("Boxes Only", blank)
                 if cv2.waitKey(1) == 27:
                     break
-            output_queue.put((frame_number, blank))
+            if output_queue.full():
+                try:
+                    output_queue.get_nowait()  # Remove old frame
+                except:
+                    pass
+            output_queue.put((frame_number, blank, rectangle_coords_conf))
 
         except Exception as e:
             print(f"YOLO tracking error: {e}")
-            output_queue.put((frame_number, blank))
+            output_queue.put((frame_number, blank, [[0, 0], [0, 0], 0]))
 
 if __name__ == "__main__":
 

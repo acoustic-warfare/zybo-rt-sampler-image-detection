@@ -171,7 +171,7 @@ cdef _convolve_coefficients_load(h):
 
 cdef void _loop_mimo_pad(q: JoinableQueue, running: Value):
     """Producer loop for MIMO using pad-delay algorithm"""
-    
+    power_framenr = 0
     # Calculating time delay for each microphone and each direction
     cdef np.ndarray[int, ndim=3, mode="c"] i32_whole_samples
     whole_samples, fractional_samples = calculate_coefficients()
@@ -193,7 +193,8 @@ cdef void _loop_mimo_pad(q: JoinableQueue, running: Value):
     while running.value:
         try:
             pad_mimo(&power_map[0, 0], &active_micro[0], int(n_active_mics))
-            q.put(power_map)
+            power_framenr += 1
+            q.put((power_map, power_framenr))
         except:
             break
     
@@ -635,7 +636,17 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
         
         # When producing frames:
         frame_number += 1
+        if q_viewer.full():
+                try:
+                    q_viewer.get_nowait()  # Remove old frame
+                except:
+                    pass
         q_viewer.put((frame_number, frame))
+        if q_yolo.full():
+            try:
+                q_yolo.get_nowait()  # Remove old frame
+            except:
+                pass
         q_yolo.put((frame_number, frame))
             
         # Control frame rate
@@ -649,6 +660,10 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
     print("Exiting camera reader")
     cap.release()
     #out.release()  #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+import subprocess
+def start_udpreplay(pcap_file, interface="lo"):
+    cmd = ["udpreplay", "-i", interface, pcap_file]
+    return subprocess.Popen(cmd)
 
 
 def mimo():
@@ -656,11 +671,12 @@ def mimo():
     import time
     v = Value('i', 1)
     q_power = JoinableQueue(maxsize=2)
-    q_viewer = JoinableQueue(maxsize=10)
-    q_yolo = JoinableQueue(maxsize=10)
+    q_viewer = JoinableQueue(maxsize=2)
+    q_yolo = JoinableQueue(maxsize=1)
     q_yolo_inference = None
-    source = "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/footage/Video.mov"
-    #source = "/dev/video0"  # Use a camera as source, change to your camera device
+    source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/vänhög.mp4"
+    #source = "/dev/video2"  # Use a camera as source, change to your camera device
+    pcap_source = "./recordings/vänhögudp_replace.pcap"  # Use a pcap file as source
     cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, source))
     cam_proc.start()    
     using_yolo = False
@@ -687,8 +703,8 @@ def mimo():
     try:
 
         producers = [
-            Process(target=producer, args=(q_power, v))
-            for _ in range(jobs)
+            Process(target=producer, args=(q_power, v)),
+            Process(target=start_udpreplay, args=((pcap_source),"lo"), daemon=True)
         ]
 
         # daemon=True is important here
@@ -716,6 +732,77 @@ def mimo():
     finally:
         v.value = 0
         disconnect()
+
+# ---- Recording functions ----
+import csv
+
+def record_webcam(video_path="output.mp4", ts_path="video_timestamps.csv", device=0, duration=10):
+    cap = cv2.VideoCapture(device)
+    cap.set(cv2.CAP_PROP_CONVERT_RGB, 1)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
+    start = time.time()
+    frame_number = 0
+    with open(ts_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["frame_number", "timestamp"])
+        while time.time() - start < duration:
+            ret, frame = cap.read()
+            if np.all(frame[..., 0] == frame[..., 1]) and np.all(frame[..., 1] == frame[..., 2]):
+                # skip this frame
+                continue
+            print("First frame shape:", frame.shape, "dtype:", frame.dtype)
+            if not ret:
+                break
+            timestamp = time.time()
+            if len(frame.shape) == 2:
+                frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            out.write(frame)
+            writer.writerow([frame_number, timestamp])
+            frame_number += 1
+    cap.release()
+    out.release()
+
+import pyshark
+
+def record_udp(interface="enp0s31f6", pcap_path="udp_capture.pcap", ts_path="udp_timestamps.csv", duration=10):
+    import subprocess
+    import threading
+
+    # Start tshark in a subprocess to capture UDP packets
+    tshark_cmd = [
+        "tshark", "-i", interface, "-f", "udp", "-w", pcap_path
+    ]
+    tshark_proc = subprocess.Popen(tshark_cmd)
+    time.sleep(duration)
+    tshark_proc.terminate()
+
+    # After capture, extract timestamps using pyshark
+    cap = pyshark.FileCapture(pcap_path, display_filter="udp")
+    with open(ts_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["packet_number", "timestamp"])
+        for i, pkt in enumerate(cap):
+            writer.writerow([i, pkt.sniff_time.timestamp()])
+    cap.close()
+
+def record_sensorfusion():
+    duration = 20  # seconds
+    output_name = get_unique_filename("output", ".mp4", "recordings")
+    output_csv = get_unique_filename("video_timestamps", ".csv", "recordings")
+    udp_capture_name = get_unique_filename("udp_capture", ".pcap", "recordings")
+    udp_csv_name = get_unique_filename("udp_timestamps", ".csv", "recordings")
+
+    p1 = Process(target=record_webcam, args=(output_name,output_csv, 2, duration))
+    p2 = Process(target=record_udp, args=("enp0s31f6", udp_capture_name, udp_csv_name, duration))
+    p1.start()
+    p2.start()
+    p1.join()
+    p2.join()
+    print("Recording complete.")
 
 
 # ---- Wrappers for the beamforming loops
@@ -753,6 +840,7 @@ def miso():
 
         producers = [
             Process(target=producer, args=(q_out, q_rec, is_running))
+
         ]
 
         # daemon=True is important here
