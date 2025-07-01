@@ -674,8 +674,8 @@ def mimo():
     q_viewer = JoinableQueue(maxsize=2)
     q_yolo = JoinableQueue(maxsize=1)
     q_yolo_inference = None
-    source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/vänhög.mp4"
-    #source = "/dev/video2"  # Use a camera as source, change to your camera device
+    #source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/vänhög.mp4"
+    source = "/dev/video0"  # Use a camera as source, change to your camera device
     pcap_source = "./recordings/vänhögudp_replace.pcap"  # Use a pcap file as source
     cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, source))
     cam_proc.start()    
@@ -687,8 +687,8 @@ def mimo():
     if(True): # Change to False to disable YOLO
         q_yolo_inference = JoinableQueue(maxsize=2)
         import sys
-        sys.path.append("../image-detection")
-        from yolo_smooth_tracking import process_video_boxes_only as process_video
+        sys.path.append("../image-detection/src/")
+        from yolo_smooth_tracking import process_video_track_boxes_only as process_video
         yolo_proc = Process(target=process_video, args=(q_yolo, q_yolo_inference, True, False, "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt"))
         yolo_proc.start()
         using_yolo = True
@@ -698,14 +698,16 @@ def mimo():
     producer = b
     jobs = 1
     viewer = Viewer()
-    connect(replay_mode=True)
+    REPLAY_MODE = False
+    connect(replay_mode=REPLAY_MODE)
 
     try:
 
         producers = [
             Process(target=producer, args=(q_power, v)),
-            Process(target=start_udpreplay, args=((pcap_source),"lo"), daemon=True)
         ]
+        if REPLAY_MODE:
+            producers.append(Process(target=start_udpreplay, args=((pcap_source),"lo"), daemon=True))
 
         # daemon=True is important here
         consumers = [
@@ -754,7 +756,6 @@ def record_webcam(video_path="output.mp4", ts_path="video_timestamps.csv", devic
             if np.all(frame[..., 0] == frame[..., 1]) and np.all(frame[..., 1] == frame[..., 2]):
                 # skip this frame
                 continue
-            print("First frame shape:", frame.shape, "dtype:", frame.dtype)
             if not ret:
                 break
             timestamp = time.time()
@@ -790,13 +791,13 @@ def record_udp(interface="enp0s31f6", pcap_path="udp_capture.pcap", ts_path="udp
     cap.close()
 
 def record_sensorfusion():
-    duration = 20  # seconds
+    duration = 60  # seconds
     output_name = get_unique_filename("output", ".mp4", "recordings")
     output_csv = get_unique_filename("video_timestamps", ".csv", "recordings")
     udp_capture_name = get_unique_filename("udp_capture", ".pcap", "recordings")
     udp_csv_name = get_unique_filename("udp_timestamps", ".csv", "recordings")
 
-    p1 = Process(target=record_webcam, args=(output_name,output_csv, 2, duration))
+    p1 = Process(target=record_webcam, args=(output_name,output_csv, 0, duration))
     p2 = Process(target=record_udp, args=("enp0s31f6", udp_capture_name, udp_csv_name, duration))
     p1.start()
     p2.start()
