@@ -674,9 +674,9 @@ def mimo():
     q_viewer = JoinableQueue(maxsize=2)
     q_yolo = JoinableQueue(maxsize=1)
     q_yolo_inference = None
-    source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/vänhög.mp4"
+    source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/statisk.mp4"
     #source = "/dev/video2"  # Use a camera as source, change to your camera device
-    pcap_source = "./recordings/vänhögudp_replace.pcap"  # Use a pcap file as source
+    pcap_source = "./recordings/statisk_replace.pcap"  # Use a pcap file as source
     cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, source))
     cam_proc.start()    
     using_yolo = False
@@ -687,8 +687,8 @@ def mimo():
     if(True): # Change to False to disable YOLO
         q_yolo_inference = JoinableQueue(maxsize=2)
         import sys
-        sys.path.append("../image-detection")
-        from yolo_smooth_tracking import process_video_boxes_only as process_video
+        sys.path.append("../image-detection/src/")
+        from yolo_smooth_tracking import process_video_track_boxes_only as process_video
         yolo_proc = Process(target=process_video, args=(q_yolo, q_yolo_inference, True, False, "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt"))
         yolo_proc.start()
         using_yolo = True
