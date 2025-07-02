@@ -279,7 +279,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
     confl = 0.1
     iou_thresh = 0.5
     corr_thresh = 0.8
-    rectangle_coords_conf = [[0, 0], [0, 0], 0]
+    rectangle_coords_conf = [[[0, 0], [0, 0], 0]]
 
     prev_frame = None
     prev_detections = []
@@ -312,6 +312,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
             tracks = tracker.update(dets)
 
             # Draw tracked boxes with IDs
+            coords_index = 0
             for track in tracks:
                 x1, y1, x2, y2, track_id = track.astype(int)
                 cv2.rectangle(blank, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -327,9 +328,13 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
                     blank, label, (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
                 )
-                rectangle_coords_conf[0] = [x1, y1]
-                rectangle_coords_conf[1] = [x2, y2]
-                rectangle_coords_conf[2] = conf
+                if coords_index < len(rectangle_coords_conf):
+                    rectangle_coords_conf[coords_index][0] = [x1, y1]
+                    rectangle_coords_conf[coords_index][1] = [x2, y2]
+                    rectangle_coords_conf[coords_index][2] = conf
+                else:
+                    rectangle_coords_conf.append([[x1, y1], [x2, y2], conf])
+                coords_index += 1
 
             if show:
                 cv2.imshow("Boxes Only", blank)

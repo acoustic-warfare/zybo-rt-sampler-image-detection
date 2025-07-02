@@ -235,7 +235,7 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
 
     should_overlay = False
     small_heatmap = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.uint8)
-    power_detection = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.float32)
+    power_detection_img = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.float32)
     
     max_power_level = np.max(image)
     if image.ndim == 3:
@@ -244,7 +244,6 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
     peak_y, peak_x = find_power_center(safe_image, region_size)
 
     if max_power_level > threshold:
-        # Create heatmap (your existing code)
         img = np.log10(safe_image)
         img -= np.log10(np.min(safe_image))
         img /= np.max(img)
@@ -262,17 +261,15 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
     
     # Resize to window dimensions
     heatmap = cv2.resize(small_heatmap, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
-    power_detection = cv2.resize(power_detection, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
-    ACTUAL_DISPLAY_SIZE = WINDOW_DIMENSIONS 
-    if should_overlay:
+    power_detection_img = cv2.resize(power_detection_img, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)   
+    ACTUAL_DISPLAY_SIZE = WINDOW_DIMENSIONS
+    if True:
         
-        # Print original coordinates
 
         # Calculate the scaled coordinates
         scaled_window_x = ACTUAL_DISPLAY_SIZE[0] - 1 - int(peak_x / (MAX_RES_X - 1) * ACTUAL_DISPLAY_SIZE[0])
         scaled_window_y = ACTUAL_DISPLAY_SIZE[1] - 1 - int(peak_y / (MAX_RES_Y - 1) * ACTUAL_DISPLAY_SIZE[1])
 
-        # Print the scaled coordinates
         # Now check the bounding box coordinates based on these scaled values
         box_width = int(ACTUAL_DISPLAY_SIZE[0] * box_size_ratio)
         box_height = int(ACTUAL_DISPLAY_SIZE[1] * box_size_ratio)
@@ -283,14 +280,13 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
         y2 = min(ACTUAL_DISPLAY_SIZE[1], scaled_window_y + box_height // 2)
 
         # Draw bounding box for debugging
-        cv2.rectangle(power_detection, (x1, y1), (x2, y2), (255, 0, 255), 3)  # Purple box
-        cv2.circle(power_detection, (scaled_window_x, scaled_window_y), 5, (0, 0, 255), -1)  # Red center
-        # Store coordinates in rectangle_coords_conf
+        power_detection = (x1, y1, x2, y2)
+        power_detection_img = cv2.rectangle(power_detection_img, (x1, y1), (x2, y2), (0, 255, 100), 2)
 
         
         
     
-    return power_detection, heatmap, should_overlay
+    return power_detection, heatmap, should_overlay, power_detection_img
 
 def find_power_center(image, region_size=3):
     """Find center with OpenCV Gaussian smoothing"""
@@ -445,7 +441,7 @@ class Viewer:
                     v.value = 0
                     break
 
-                powerlevel_box, res1, should_overlay = calculate_heatmap_with_detection(output)
+                powerlevel_box, res1, should_overlay, power_detection_img = calculate_heatmap_with_detection(output)
 
                 res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
                 prev = res
@@ -470,7 +466,7 @@ class Viewer:
                     combined_resized = cv2.resize(combined, display_size)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
                 elif NUM_WINDOWS == 1:
-                    combined_resized = decider.create_image(image, yolo_image, powerlevel_box, res)
+                    combined_resized = decider.create_image(image, yolo_image, power_detection_img, conf, powerlevel_box, res)
                     if len(combined_resized.shape) == 2:
                         combined_resized = cv2.cvtColor(combined_resized, cv2.COLOR_GRAY2BGR)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
