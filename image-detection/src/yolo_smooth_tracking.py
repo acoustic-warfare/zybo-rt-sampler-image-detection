@@ -279,7 +279,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
     confl = 0.1
     iou_thresh = 0.5
     corr_thresh = 0.8
-    rectangle_coords_conf = [[[0, 0], [0, 0], 0]]
+    rectangle_coords_conf = [[0, 0, 0, 0, 0, 0]]
 
     prev_frame = None
     prev_detections = []
@@ -329,11 +329,15 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
                 )
                 if coords_index < len(rectangle_coords_conf):
-                    rectangle_coords_conf[coords_index][0] = [x1, y1]
-                    rectangle_coords_conf[coords_index][1] = [x2, y2]
-                    rectangle_coords_conf[coords_index][2] = conf
+                    rectangle_coords_conf[coords_index][0] = x1
+                    rectangle_coords_conf[coords_index][1] = y1
+                    rectangle_coords_conf[coords_index][2] = x2
+                    rectangle_coords_conf[coords_index][3] = y2
+                    rectangle_coords_conf[coords_index][4] = conf
+                    rectangle_coords_conf[coords_index][5] = track_id
+                    
                 else:
-                    rectangle_coords_conf.append([[x1, y1], [x2, y2], conf])
+                    rectangle_coords_conf.append([x1, y1, x2, y2, conf, track_id])
                 coords_index += 1
 
             if show:
@@ -349,7 +353,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
 
         except Exception as e:
             print(f"YOLO tracking error: {e}")
-            output_queue.put((frame_number, blank, [[0, 0], [0, 0], 0]))
+            output_queue.put((frame_number, blank, [0, 0, 0, 0, 0, 0]))
 
 
 if __name__ == "__main__":
