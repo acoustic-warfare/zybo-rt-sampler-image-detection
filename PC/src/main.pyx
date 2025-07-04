@@ -689,7 +689,7 @@ def mimo():
         import sys
         sys.path.append("../image-detection/src/")
         from yolo_smooth_tracking import process_video_track_boxes_only as process_video
-        yolo_proc = Process(target=process_video, args=(q_yolo, q_yolo_inference, True, False, "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt"))
+        yolo_proc = Process(target=process_video, args=(q_yolo, q_yolo_inference, True, False, "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt", v))
         yolo_proc.start()
         using_yolo = True
         
@@ -733,6 +733,16 @@ def mimo():
         print("Interrupted by user")
     finally:
         v.value = 0
+        print("Stopping all processes")
+        for p in consumers + producers:
+            if p.is_alive():
+                p.join(timeout=1)
+        print("Disconnecting from FPGA")
+        if REPLAY_MODE:
+            try:
+                subprocess.run(["pkill", "-f", "udpreplay"], check=True)
+            except subprocess.CalledProcessError:
+                print("No udpreplay process found")
         disconnect()
 
 # ---- Recording functions ----

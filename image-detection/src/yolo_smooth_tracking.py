@@ -272,7 +272,8 @@ def process_video_track(video_path, model_path, rec=True):
     cap.release()
     cv2.destroyAllWindows()
 
-def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None):
+from multiprocessing import JoinableQueue, Value
+def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None, running: Value = None):
     detector = yolo_model(model_path)
     tracker = Sort()  # SORT tracker
     confh = 0.7
@@ -284,7 +285,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
     prev_frame = None
     prev_detections = []
 
-    while True:
+    while running:
         try:
             frame_number, frame = frame_queue.get()
             frame_queue.task_done()
@@ -354,6 +355,11 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
         except Exception as e:
             print(f"YOLO tracking error: {e}")
             output_queue.put((frame_number, blank, [0, 0, 0, 0, 0, 0]))
+        except KeyboardInterrupt:
+            print("Keyboard interrupt received, stopping tracking.")
+            if running is not None:
+                running.value = False
+            break
 
 
 if __name__ == "__main__":

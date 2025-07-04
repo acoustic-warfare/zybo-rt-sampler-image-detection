@@ -298,7 +298,7 @@ def find_power_center(image, region_size=3):
     smoothed = cv2.GaussianBlur(image_f32, (kernel_size, kernel_size), sigmaX=1.0, sigmaY=1.0)
     
     max_val = np.max(smoothed)
-    threshold = max_val * 0.95
+    threshold = max_val * 0.85
     high_power_mask = smoothed >= threshold
     
     if np.sum(high_power_mask) > 0:
