@@ -275,8 +275,8 @@ def process_video_track(video_path, model_path, rec=True):
 def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None):
     detector = yolo_model(model_path)
     tracker = Sort()  # SORT tracker
-    confh = 0.5
-    confl = 0.1
+    confh = 0.7
+    confl = 0.4
     iou_thresh = 0.5
     corr_thresh = 0.8
     rectangle_coords_conf = [[0, 0, 0, 0, 0, 0]]

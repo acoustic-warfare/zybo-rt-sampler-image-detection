@@ -241,7 +241,7 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
     if image.ndim == 3:
         image = image[..., 0]
     safe_image = np.clip(image, 1e-12, None)
-    peak_y, peak_x = find_power_center(safe_image, region_size)
+    peak_x, peak_y = find_power_center(safe_image, region_size)
 
     if max_power_level > threshold:
         img = np.log10(safe_image)
@@ -302,7 +302,7 @@ def find_power_center(image, region_size=3):
     high_power_mask = smoothed >= threshold
     
     if np.sum(high_power_mask) > 0:
-        y_indices, x_indices = np.indices(smoothed.shape)
+        x_indices, y_indices = np.indices(smoothed.shape)
         
         # Use cubed power for strong weighting
         weights = (smoothed ** 3) * high_power_mask
@@ -315,7 +315,7 @@ def find_power_center(image, region_size=3):
     
     # Fallback
     peak_idx = np.unravel_index(np.argmax(smoothed), smoothed.shape)
-    return peak_idx[1], peak_idx[0]
+    return peak_idx[0], peak_idx[1]
 
 import queue
 from multiprocessing import JoinableQueue, Value
@@ -398,75 +398,79 @@ class Viewer:
         # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
         # self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
+    def mouse_click_handler(self, event, x, y, flags, params):
+        """Steers the antenna to listen in a specific direction"""
+        if event == cv2.EVENT_LBUTTONDOWN:
+            horizontal = (x / WINDOW_DIMENSIONS[0]) * self.MAX_X * 2 - self.MAX_X
+            vertical = (y / WINDOW_DIMENSIONS[1]) * self.MAX_Y * 2 - self.MAX_Y
+            # steer(-horizontal, vertical)
+            print(f"{horizontal}, {vertical}")
+            self.cb(horizontal, vertical)
+            print("Steering done")
+    
     def loop(self, q_power: JoinableQueue, v: Value, q_viewer: JoinableQueue = None, q_inference: JoinableQueue = None):
         """Threaded or Multiprocessing loop that should not be called by the user
 
         Args:
-            q (JoinableQueue): FIFO containing the latest powermaps from the algorithm
+            q_power (JoinableQueue): FIFO containing the latest powermaps from the algorithm
             v (Value): a value that will stop this thread or process when other than 1
-            q2 (JoinableQueue, optional): FIFO containing YOLO processed frames
+            q2_viewerbleQueue, optional): FIFO containing camera captured raw images
+            q_inference (JoinableQueue, optional): FIFO containing YOLO processed frames
         """
         from sensorfusion.decider import sensorfusiondecider
-        prev = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        decider_window_res = (640, 360)
+        decider = sensorfusiondecider(decider_window_res, MAX_ANGLE=MAX_ANGLE, ASPECT_RATIO=ASPECT_RATIO)
+        prev_heat_output = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        prev_heatmap = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        prev_viewer = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
         self.MAX_X = MAX_ANGLE
         self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
-        decider = sensorfusiondecider((640, 360), MAX_ANGLE=MAX_ANGLE, ASPECT_RATIO=ASPECT_RATIO)
         while v.value == 1:
             try:
-                yolo_frame_num, yolo_frame, conf = q_inference.get()
-                output, power_frame_number = q_power.get()
-                q_inference.task_done()
-                q_power.task_done()
-                viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else None
-                q_viewer.task_done()
-                print(f"Viewer frame: {viewer_frame_num}, Yolo frame: {yolo_frame_num}, Power frame: {power_frame_number}")
-                # while not (abs(viewer_frame_num - yolo_frame_num) < 5 and abs(viewer_frame_num - power_frame_number) < 5):
-                #     if viewer_frame_num < yolo_frame_num | viewer_frame_num < power_frame_number:
-                #         viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else (None, None)
-                #         q_viewer.task_done()
-                #     elif yolo_frame_num < power_frame_number | yolo_frame_num < viewer_frame_num:
-                #         yolo_frame_num, yolo_frame, conf = q_inference.get(block=False)
-                #         q_inference.task_done()
-                #     elif power_frame_number < viewer_frame_num | power_frame_number < yolo_frame_num:
-                #         output, power_frame_number = q_power.get(block=False)
-                #         q_power.task_done()
-                    
-                if frame is None:
-                    frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
-                frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
+                # First get frames, for image if no frame use previous
                 try:
-                    frame = cv2.resize(frame, WINDOW_DIMENSIONS)
-                except cv2.error as e:
-                    print("An error ocurred with image processing! Check if camera and antenna connected properly")
-                    v.value = 0
-                    break
-
-                powerlevel_box, res1, should_overlay, power_detection_img = calculate_heatmap_with_detection(output)
-
-                res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
-                prev = res
-                if HEATMAP_COLOR:
-                    image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
+                    yolo_frame_num, yolo_frame, conf = q_inference.get()
+                    q_inference.task_done()
+                except queue.Empty:
+                    yolo_frame_num, yolo_frame, conf = None, None, None
+                try:
+                    power_output, power_frame_number = q_power.get()
+                    q_power.task_done()
+                except queue.Empty:
+                    power_output, power_frame_number = None, None
+                try:
+                    viewer_frame_num, viewer_frame = q_viewer.get(block=False)
+                    q_viewer.task_done()
+                except queue.Empty:
+                    viewer_frame_num, viewer_frame = None, None
+                if viewer_frame is None:
+                    viewer_frame = prev_viewer
                 else:
-                    image = frame
-
-                # YOLO inference:
-                yolo_image = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
-                if q_inference is not None:
-                    try:
-                        if yolo_frame is not None:
-                            yolo_image = cv2.resize(yolo_frame, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
-                    except queue.Empty:
-                        print("No YOLO frame received")
-                        pass
+                    prev_viewer = viewer_frame
+                viewer_frame = cv2.flip(viewer_frame, 1)
                 
-                if NUM_WINDOWS == 2:
-                    combined = np.hstack((image, yolo_image))
-                    display_size = (1280, 360)  # width, height for the window
-                    combined_resized = cv2.resize(combined, display_size)
-                    cv2.imshow(APPLICATION_NAME, combined_resized)
-                elif NUM_WINDOWS == 1:
-                    combined_resized = decider.create_image(image, yolo_image, power_detection_img, conf, powerlevel_box, res)
+                if yolo_frame is None:
+                    yolo_frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
+                if power_output is None:
+                    power_output = prev_heat_output
+                else:
+                    prev_heat_output = power_output
+                
+                # then get heatmap output
+                powerlevel_box, heatmap, should_overlay, power_detection_img = calculate_heatmap_with_detection(power_output)
+
+                # add heatmap to previous
+                res = cv2.addWeighted(prev_heatmap, 0.5, heatmap, 0.5, 0)
+                prev_heatmap = res
+
+                    
+                # if NUM_WINDOWS == 2:
+                #     combined = np.hstack((image, yolo_image))
+                #     display_size = (1280, 360)  # width, height for the window
+                #     combined_resized = cv2.resize(combined, display_size)
+                #     cv2.imshow(APPLICATION_NAME, combined_resized)
+                if NUM_WINDOWS == 1:
+                    combined_resized = decider.create_image(viewer_frame, yolo_frame, power_detection_img, conf, powerlevel_box, res)
                     if len(combined_resized.shape) == 2:
                         combined_resized = cv2.cvtColor(combined_resized, cv2.COLOR_GRAY2BGR)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
@@ -478,15 +482,6 @@ class Viewer:
             except KeyboardInterrupt:
                 v.value = 0
                 break
-    def mouse_click_handler(self, event, x, y, flags, params):
-        """Steers the antenna to listen in a specific direction"""
-        if event == cv2.EVENT_LBUTTONDOWN:
-            horizontal = (x / WINDOW_DIMENSIONS[0]) * self.MAX_X * 2 - self.MAX_X
-            vertical = (y / WINDOW_DIMENSIONS[1]) * self.MAX_Y * 2 - self.MAX_Y
-            # steer(-horizontal, vertical)
-            print(f"{horizontal}, {vertical}")
-            self.cb(horizontal, vertical)
-            print("Steering done")
 
 
 if __name__ == "__main__":

@@ -67,59 +67,12 @@ class sensorfusiondecider:
         # combined = cv2.addWeighted(combined, 1, power_image, 0.7, 0)
         # combined = cv2.addWeighted(combined, 1, heatmap, 0.7, 0)
         # combined = cv2.addWeighted(combined, 1, decider_img, 0.7, 0)
-        print("yolo rect confidence:", yolo_rect_conf)
         decider_img = self.get_decision(image, yolo_image, power_detection_img, yolo_rect_conf, power_rect, heatmap)
         combined = decider_img
 
         combined_resized = cv2.flip(combined, 1)  # Flip combined image
 
         return combined_resized
-    
-    def get_decision_(self, image, yolo_image, power_detection_img, yolo_rect_conf, power_rect, heatmap):
-        #Start by checking the light level
-        light_level = self.get_lightlevel(image)    
-        blank = np.zeros_like(image)
-        best_rect = [[0, 0], [0, 0], 0]
-        yolo_image_use = True
-        power_image_use = True
-        power_image = np.array([1])
-        print(light_level)
-        if light_level < 0.2:
-            print("Low light level, using heatmap")
-            yolo_image_use = False
-
-        #Now check the heatmap for entropy (multiple sources of sound or not)
-        entropy_conf = self.get_entropy(heatmap)
-        print("Entropy confidence:", entropy_conf)
-        if entropy_conf < 0.076  :
-            power_image_use = False
-            #print("Low entropy, using yolo detection")
-
-        #Get yolo rect with highest confidence
-        if yolo_rect_conf is None or len(yolo_rect_conf) == 0:
-            print("No YOLO detection, using power rect")
-            yolo_rect_conf = [[0, 0], [0, 0], 0]
-        elif yolo_image_use:
-            best_rect = max(yolo_rect_conf, key=lambda x: x[2]) 
-            yolo_image = self.create_rect(blank.copy(), (best_rect[0][0], best_rect[0][1], best_rect[1][0], best_rect[1][1]))
-        #Get Intersection over union (how much the boxes overlap)
-        iou = self.get_iou((best_rect[0][0], best_rect[0][1], best_rect[1][0], best_rect[1][1]), power_rect)
-        if iou > 0.9:
-            #High iou, using the center between rectangles
-            x1, y1, x2, y2 = (yolo_rect_conf[0][0], yolo_rect_conf[0][1], yolo_rect_conf[1][0], yolo_rect_conf[1][1])
-            x3, y3, x4, y4 = power_rect
-            x_mid1 = (x1 + x2) / 2
-            y_mid1 = (y1 + y2) / 2
-            x_mid2 = (x3 + x4) / 2
-            y_mid2 = (y3 + y4) / 2
-            decider_img = cv2.rectangle(blank.copy(), (int(x_mid1), int(y_mid1)), (int(x_mid2), int(y_mid2)), (100, 255, 255), 2)
-        else : decider_img = blank
-        if power_image.any():
-            power_image = self.create_rect(power_detection_img, (power_rect[0], power_rect[1], power_rect[2], power_rect[3]), color=(0, 255, 100))
-
-
-        
-        return image, yolo_image, power_image, decider_img
     
     def get_decision(self, image, yolo_image, power_detection_img, yolo_rect_conf, power_rect, heatmap):
         yolo_image_use = True
