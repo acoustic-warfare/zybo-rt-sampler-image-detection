@@ -414,8 +414,8 @@ class Viewer:
         Args:
             q_power (JoinableQueue): FIFO containing the latest powermaps from the algorithm
             v (Value): a value that will stop this thread or process when other than 1
-            q2_viewerbleQueue, optional): FIFO containing camera captured raw images
-            q_inference (JoinableQueue, optional): FIFO containing YOLO processed frames
+            q2_viewer(JoinableQueue): FIFO containing camera captured raw images
+            q_inference (JoinableQueue): FIFO containing YOLO processed frames
         """
         from sensorfusion.decider import sensorfusiondecider
         decider_window_res = (640, 360)
@@ -427,7 +427,7 @@ class Viewer:
         self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
         while v.value == 1:
             try:
-                # First get frames, for image if no frame use previous
+                # First get frames, if no frame for image use previous
                 try:
                     yolo_frame_num, yolo_frame, conf = q_inference.get()
                     q_inference.task_done()

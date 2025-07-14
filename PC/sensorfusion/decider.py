@@ -103,8 +103,6 @@ class sensorfusiondecider:
             decider_img = image.copy()
             return decider_img
         
-        #if yolo is true, check if rect has done a possible movement
-
         #if yolo true power false, use all yolo rects
         if yolo_image_use and not power_image_use:
             print("Using yolo detection only")
@@ -145,13 +143,18 @@ class sensorfusiondecider:
             decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 0))
             return decider_img
 
-        #if no iou and several yolo, get closest yolo weighted by confidence
+        #if no iou and several yolo, get closest yolo weighted by confidence, but also limit to a certain distance(and if return is 0 use power rect)
 
         elif iou < 0.1 and amount_inferences > 1:
             print("No iou, using closest yolo detection")
-            closest_box = self.get_closest_rect(yolo_rect_conf, power_rect)
+            closest_box = self.get_closest_rect(yolo_rect_conf, power_rect, 150)
             x1, y1, x2, y2, conf = closest_box
-            decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 255))
+            if conf < self.image_confidence_threshold:
+                print("Low confidence, using power rect")
+                x1, y1, x2, y2 = power_rect
+                decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(0, 0, 255))
+            else:
+                decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 255))
             return decider_img
 
 
@@ -219,7 +222,7 @@ class sensorfusiondecider:
 
         return (x_min, y_min, x_max, y_max)
     
-    def get_closest_rect(self, boxes_confidence, target_rect):
+    def get_closest_rect(self, boxes_confidence, target_rect, max_distance=100):
         closest_box = None
         min_distance = float('inf')
         if len(boxes_confidence[0]) == 5:
@@ -234,8 +237,11 @@ class sensorfusiondecider:
                 if distance < min_distance:
                     min_distance = distance
                     closest_box = box
+                
 
-            return closest_box if closest_box is not None else [0, 0, 0, 0, 0, 0]
+            if min_distance > max_distance:
+                return [0, 0, 0, 0, 0]  # Return empty box if too far
+            return closest_box if closest_box is not None else [0, 0, 0, 0, 0]
         else:
             for box in boxes_confidence:
                 x1, y1, x2, y2 = box

@@ -615,12 +615,8 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
     cap = cv2.VideoCapture(src)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30  # Get video FPS
     frame_delay = 1.0 / fps  # Delay between frames
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v') #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
-    filename = get_unique_filename("output", ".mp4", "recordings")
-
-
-    #out = cv2.VideoWriter(filename, fourcc, 20.0, (640, 360)) #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
     frame_number = 0
+
     while running.value:
         start_time = time.time()
         
@@ -630,9 +626,6 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
             print("No frame captured, resetting video capture")
             continue
         frame = cv2.resize(frame, (640, 360))
-        #out.write(frame)#COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
-        #if not out.isOpened():
-            #print("Error: Could not open video writer")
         
         # When producing frames:
         frame_number += 1
@@ -657,9 +650,10 @@ def camera_reader(q_yolo, q_viewer, running, src="/dev/video0"):
             print("Exiting viewer")
             running.value = 0
             break
-    print("Exiting camera reader")
+    
     cap.release()
-    #out.release()  #COMMENT OUT IF YOU DON'T WANT TO SAVE VIDEO
+
+
 import subprocess
 def start_udpreplay(pcap_file, interface="lo"):
     cmd = ["udpreplay", "-i", interface, pcap_file]
@@ -674,8 +668,8 @@ def mimo():
     q_viewer = JoinableQueue(maxsize=2)
     q_yolo = JoinableQueue(maxsize=1)
     q_yolo_inference = None
-    source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/output.mp4"
-    #source = "/dev/video0"  # Use a camera as source, change to your camera device
+    source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/output.mov"
+    #source = "/dev/video2"  # Use a camera as source, change to your camera device
     pcap_source = "./recordings/longcapture_replace.pcap"  # Use a pcap file as source
     cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, source))
     cam_proc.start()    
