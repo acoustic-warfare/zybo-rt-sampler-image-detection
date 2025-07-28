@@ -242,6 +242,7 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
         image = image[..., 0]
     safe_image = np.clip(image, 1e-12, None)
     peak_x, peak_y = find_power_center(safe_image, region_size)
+    
 
     if max_power_level > threshold:
         img = np.log10(safe_image)
@@ -271,8 +272,21 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
         scaled_window_y = ACTUAL_DISPLAY_SIZE[1] - 1 - int(peak_y / (MAX_RES_Y - 1) * ACTUAL_DISPLAY_SIZE[1])
 
         # Now check the bounding box coordinates based on these scaled values
-        box_width = int(ACTUAL_DISPLAY_SIZE[0] * box_size_ratio)
-        box_height = int(ACTUAL_DISPLAY_SIZE[1] * box_size_ratio)
+        # Normalize power level to [0, 1], assuming max_power_level is in [threshold, 1.0] range
+        normalized_power = np.clip((max_power_level - threshold) / (1.0 - threshold), 0.0, 1.0)
+
+        # Invert so higher power = larger box
+        distance_scale = 1.0 - normalized_power  # closer => small value, farther => large value
+
+        # Scale box size with power (inverse of distance)
+        dynamic_scale = 0.5 + 0.5 * (1.0 - distance_scale)  # keep within [0.5, 1.0] scaling
+
+        # Apply dynamic scaling to box size ratio
+        scaled_box_ratio = box_size_ratio * dynamic_scale
+
+        box_width = int(ACTUAL_DISPLAY_SIZE[0] * scaled_box_ratio)
+        box_height = int(ACTUAL_DISPLAY_SIZE[1] * scaled_box_ratio)
+
 
         x1 = max(0, scaled_window_x - box_width // 2)
         y1 = max(0, scaled_window_y - box_height // 2)
@@ -294,7 +308,7 @@ def find_power_center(image, region_size=3):
     image_f32 = image.astype(np.float32)
     
     # Apply Gaussian blur (kernel size should be odd)
-    kernel_size = 5  # Adjust for more/less smoothing
+    kernel_size = 9  # Adjust for more/less smoothing
     smoothed = cv2.GaussianBlur(image_f32, (kernel_size, kernel_size), sigmaX=1.0, sigmaY=1.0)
     
     max_val = np.max(smoothed)
@@ -304,8 +318,7 @@ def find_power_center(image, region_size=3):
     if np.sum(high_power_mask) > 0:
         x_indices, y_indices = np.indices(smoothed.shape)
         
-        # Use cubed power for strong weighting
-        weights = (smoothed ** 3) * high_power_mask
+        weights = (smoothed ** 2) * high_power_mask
         total_weight = np.sum(weights)
         
         if total_weight > 0:
@@ -380,7 +393,7 @@ class Front:
             # We need to invert Y-axis for the incoming frame since CV2 indexes it as Y - y
             self.q_out.put((vertical, 1.0 - horizontal))
             print(f"{horizontal}, {vertical}")
-
+import time
 
 class Viewer:
     """Test viewer used for outputting calculated heatmaps onto a screen
@@ -425,8 +438,10 @@ class Viewer:
         prev_viewer = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
         self.MAX_X = MAX_ANGLE
         self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
+        
         while v.value == 1:
             try:
+                start_time = time.time()
                 # First get frames, if no frame for image use previous
                 try:
                     yolo_frame_num, yolo_frame, conf = q_inference.get()
@@ -474,6 +489,7 @@ class Viewer:
                     if len(combined_resized.shape) == 2:
                         combined_resized = cv2.cvtColor(combined_resized, cv2.COLOR_GRAY2BGR)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
+                    print("Ms: ", (time.time() - start_time) * 1000)
 
                 cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
                 cv2.waitKey(1)

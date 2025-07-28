@@ -242,6 +242,7 @@ def process_video_track(video_path, model_path, rec=True):
                 (0, 255, 0),
                 2,
             )
+            print(f"Track ID: {int(track_id)}, Confidence: {conf:.2f}")
             
 
         # Optionally, fallback to your correlation logic if no valid detections
@@ -277,10 +278,10 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
     detector = yolo_model(model_path)
     tracker = Sort()  # SORT tracker
     confh = 0.7
-    confl = 0.4
+    confl = 0.5
     iou_thresh = 0.5
     corr_thresh = 0.8
-    rectangle_coords_conf = [[0, 0, 0, 0, 0, 0]]
+    rectangle_coords_conf = []
 
     prev_frame = None
     prev_detections = []
@@ -294,6 +295,8 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
             continue
 
         try:
+            rectangle_coords_conf = []  # Reset for each frame
+
             # Ensure frame is color
             blank = np.zeros_like(frame)
             if len(blank.shape) == 2:
@@ -329,17 +332,8 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
                     blank, label, (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
                 )
-                if coords_index < len(rectangle_coords_conf):
-                    rectangle_coords_conf[coords_index][0] = x1
-                    rectangle_coords_conf[coords_index][1] = y1
-                    rectangle_coords_conf[coords_index][2] = x2
-                    rectangle_coords_conf[coords_index][3] = y2
-                    rectangle_coords_conf[coords_index][4] = conf
-                    rectangle_coords_conf[coords_index][5] = track_id
-                    
-                else:
-                    rectangle_coords_conf.append([x1, y1, x2, y2, conf, track_id])
-                coords_index += 1
+                rectangle_coords_conf.append([x1, y1, x2, y2, conf, track_id])
+                
 
             if show:
                 cv2.imshow("Boxes Only", blank)
@@ -354,7 +348,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
 
         except Exception as e:
             print(f"YOLO tracking error: {e}")
-            output_queue.put((frame_number, blank, [0, 0, 0, 0, 0, 0]))
+            output_queue.put((frame_number, blank, []))
         except KeyboardInterrupt:
             print("Keyboard interrupt received, stopping tracking.")
             if running is not None:
@@ -365,7 +359,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
 if __name__ == "__main__":
 
     process_video_track(
-        "/dev/video2",
-        "runs/detect/train4/weights/best_of_all.pt",
+        "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/output.mov",
+        "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt",
         rec=False,
     )
