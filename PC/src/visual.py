@@ -410,6 +410,11 @@ class Viewer:
         # self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
         # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
         # self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+        self.writer = None  # Will be initialized in loop()
+        self.record_output = True  # Toggle this if needed
+        self.output_path = "./recordings/output_video.avi"
+        self.fps = 30
+        self.frame_size = (640, 360)  # Adjust this to match combined_resized
 
     def mouse_click_handler(self, event, x, y, flags, params):
         """Steers the antenna to listen in a specific direction"""
@@ -438,7 +443,9 @@ class Viewer:
         prev_viewer = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
         self.MAX_X = MAX_ANGLE
         self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
-        
+        if self.record_output and self.writer is None:
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')  # or 'MJPG', 'MP4V' for .mp4
+            self.writer = cv2.VideoWriter(self.output_path, fourcc, self.fps, self.frame_size)
         while v.value == 1:
             try:
                 start_time = time.time()
@@ -486,6 +493,11 @@ class Viewer:
                 #     cv2.imshow(APPLICATION_NAME, combined_resized)
                 if NUM_WINDOWS == 1:
                     combined_resized = decider.create_image(viewer_frame, yolo_frame, power_detection_img, conf, powerlevel_box, res)
+                    if self.record_output and self.writer is not None:
+                        frame_to_write = combined_resized
+                        if frame_to_write.shape[:2][::-1] != self.frame_size:
+                            frame_to_write = cv2.resize(frame_to_write, self.frame_size)
+                        self.writer.write(frame_to_write)
                     if len(combined_resized.shape) == 2:
                         combined_resized = cv2.cvtColor(combined_resized, cv2.COLOR_GRAY2BGR)
                     cv2.imshow(APPLICATION_NAME, combined_resized)
@@ -498,6 +510,8 @@ class Viewer:
             except KeyboardInterrupt:
                 v.value = 0
                 break
+        if self.writer is not None:
+            self.writer.release()
 
 
 if __name__ == "__main__":

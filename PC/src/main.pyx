@@ -669,7 +669,7 @@ def mimo():
     q_yolo = JoinableQueue(maxsize=1)
     q_yolo_inference = None
     #source = "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/output.mov"
-    source = "/dev/video0"  # Use a camera as source, change to your camera device
+    source = "/dev/video2"  # Use a camera as source, change to your camera device
     pcap_source = "./recordings/longcapture_replace.pcap"  # Use a pcap file as source
     cam_proc = Process(target=camera_reader, args=(q_yolo, q_viewer, v, source))
     cam_proc.start()    

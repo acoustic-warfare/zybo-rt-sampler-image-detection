@@ -255,6 +255,7 @@ class sensorfusiondecider:
             decider_img1 = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 255, 255))
             decider_img = self.create_rect(decider_img1, self.kalman.get_smoothed_state(), color=(0, 255, 0))
             self.kalman.sensor_update([x1, y1, x2, y2], self.kalman.R_iou)
+            self.kalman.sensor_update([x1, y1, x2, y2], self.kalman.R_bf)
             return decider_img
 
         #if no iou and several yolo, get closest yolo weighted by confidence, but also limit to a certain distance(and if return is 0 use power rect)
@@ -270,6 +271,7 @@ class sensorfusiondecider:
             else:
                 decider_img1 = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 255))
                 self.kalman.sensor_update([x1, y1, x2, y2], self.kalman.R_obj)
+                self.kalman.sensor_update([x1, y1, x2, y2], self.kalman.R_bf)
             decider_img = self.create_rect(decider_img1, self.kalman.get_smoothed_state(), color=(255, 0, 0))
                 
             return decider_img
