@@ -28,7 +28,7 @@ class Kalman:
 
         self.kf.P *= 50.
 
-        self.R_bf = np.diag([0.2, 0.5, 0.2, 0.5])  # bounding box noise
+        self.R_bf = np.diag([0.5, 0.8, 0.5, 0.8])  # bounding box noise
         self.R_obj = np.diag([0.05, 0.05, 0.05, 0.05])
         self.R_iou = np.diag([0.01, 0.01, 0.01, 0.01])
 
@@ -36,10 +36,10 @@ class Kalman:
 
         freq = 1.0 / self.dt
         self.filters = [
-            OneEuroFilter(freq, min_cutoff=1.0, beta=0.3),
-            OneEuroFilter(freq, min_cutoff=1.0, beta=0.3),
-            OneEuroFilter(freq, min_cutoff=1.0, beta=0.3),
-            OneEuroFilter(freq, min_cutoff=1.0, beta=0.3),
+            OneEuroFilter(freq, min_cutoff=1.5, beta=0.2),  # more smoothing
+            OneEuroFilter(freq, min_cutoff=1.5, beta=0.2),  # vertical - more aggressive
+            OneEuroFilter(freq, min_cutoff=1.5, beta=0.2),
+            OneEuroFilter(freq, min_cutoff=1.5, beta=0.2),
         ]
 
         self.missing_counter = 0
@@ -85,7 +85,7 @@ class Kalman:
         self.missing_counter = 0
 
     def get_smoothed_state(self, 
-                       min_size=30, max_size=300, 
+                       min_size=30, max_size=150, 
                        min_aspect=0.5, max_aspect=2.0):
         """
         Returns the smoothed bounding box [x1, y1, x2, y2], clamped to size and aspect ratio.

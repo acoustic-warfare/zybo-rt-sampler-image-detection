@@ -182,8 +182,6 @@ class sensorfusiondecider:
         yolo_rect_conf = np.array(yolo_rect_conf)
         iou = 0.0
         self.kalman.predict()
-        print("Yolo confs:", yolo_rect_conf)
-
 
         #Start by checking the light level
         light_level = self.get_lightlevel(image)
