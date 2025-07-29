@@ -242,6 +242,7 @@ def process_video_track(video_path, model_path, rec=True):
                 (0, 255, 0),
                 2,
             )
+            print(f"Track ID: {int(track_id)}, Confidence: {conf:.2f}")
             
 
         # Optionally, fallback to your correlation logic if no valid detections
@@ -272,19 +273,20 @@ def process_video_track(video_path, model_path, rec=True):
     cap.release()
     cv2.destroyAllWindows()
 
-def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None):
+from multiprocessing import JoinableQueue, Value
+def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None, running: Value = None):
     detector = yolo_model(model_path)
     tracker = Sort()  # SORT tracker
-    confh = 0.5
-    confl = 0.1
+    confh = 0.7
+    confl = 0.5
     iou_thresh = 0.5
     corr_thresh = 0.8
-    rectangle_coords_conf = [[0, 0], [0, 0], 0]
+    rectangle_coords_conf = []
 
     prev_frame = None
     prev_detections = []
 
-    while True:
+    while running:
         try:
             frame_number, frame = frame_queue.get()
             frame_queue.task_done()
@@ -293,6 +295,8 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
             continue
 
         try:
+            rectangle_coords_conf = []  # Reset for each frame
+
             # Ensure frame is color
             blank = np.zeros_like(frame)
             if len(blank.shape) == 2:
@@ -312,6 +316,7 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
             tracks = tracker.update(dets)
 
             # Draw tracked boxes with IDs
+            coords_index = 0
             for track in tracks:
                 x1, y1, x2, y2, track_id = track.astype(int)
                 cv2.rectangle(blank, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -327,9 +332,8 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
                     blank, label, (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
                 )
-                rectangle_coords_conf[0] = [x1, y1]
-                rectangle_coords_conf[1] = [x2, y2]
-                rectangle_coords_conf[2] = conf
+                rectangle_coords_conf.append([x1, y1, x2, y2, conf, track_id])
+                
 
             if show:
                 cv2.imshow("Boxes Only", blank)
@@ -344,13 +348,18 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
 
         except Exception as e:
             print(f"YOLO tracking error: {e}")
-            output_queue.put((frame_number, blank, [[0, 0], [0, 0], 0]))
+            output_queue.put((frame_number, blank, []))
+        except KeyboardInterrupt:
+            print("Keyboard interrupt received, stopping tracking.")
+            if running is not None:
+                running.value = False
+            break
 
 
 if __name__ == "__main__":
 
     process_video_track(
-        "/dev/video2",
-        "runs/detect/train4/weights/best_of_all.pt",
+        "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/output.mov",
+        "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt",
         rec=False,
     )

@@ -235,16 +235,16 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
 
     should_overlay = False
     small_heatmap = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.uint8)
-    power_detection = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.float32)
+    power_detection_img = np.zeros((MAX_RES_Y, MAX_RES_X, 3), dtype=np.float32)
     
     max_power_level = np.max(image)
     if image.ndim == 3:
         image = image[..., 0]
     safe_image = np.clip(image, 1e-12, None)
-    peak_y, peak_x = find_power_center(safe_image, region_size)
+    peak_x, peak_y = find_power_center(safe_image, region_size)
+    
 
     if max_power_level > threshold:
-        # Create heatmap (your existing code)
         img = np.log10(safe_image)
         img -= np.log10(np.min(safe_image))
         img /= np.max(img)
@@ -262,20 +262,31 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
     
     # Resize to window dimensions
     heatmap = cv2.resize(small_heatmap, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
-    power_detection = cv2.resize(power_detection, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
-    ACTUAL_DISPLAY_SIZE = WINDOW_DIMENSIONS 
-    if should_overlay:
+    power_detection_img = cv2.resize(power_detection_img, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)   
+    ACTUAL_DISPLAY_SIZE = WINDOW_DIMENSIONS
+    if True:
         
-        # Print original coordinates
 
         # Calculate the scaled coordinates
         scaled_window_x = ACTUAL_DISPLAY_SIZE[0] - 1 - int(peak_x / (MAX_RES_X - 1) * ACTUAL_DISPLAY_SIZE[0])
         scaled_window_y = ACTUAL_DISPLAY_SIZE[1] - 1 - int(peak_y / (MAX_RES_Y - 1) * ACTUAL_DISPLAY_SIZE[1])
 
-        # Print the scaled coordinates
         # Now check the bounding box coordinates based on these scaled values
-        box_width = int(ACTUAL_DISPLAY_SIZE[0] * box_size_ratio)
-        box_height = int(ACTUAL_DISPLAY_SIZE[1] * box_size_ratio)
+        # Normalize power level to [0, 1], assuming max_power_level is in [threshold, 1.0] range
+        normalized_power = np.clip((max_power_level - threshold) / (1.0 - threshold), 0.0, 1.0)
+
+        # Invert so higher power = larger box
+        distance_scale = 1.0 - normalized_power  # closer => small value, farther => large value
+
+        # Scale box size with power (inverse of distance)
+        dynamic_scale = 0.5 + 0.5 * (1.0 - distance_scale)  # keep within [0.5, 1.0] scaling
+
+        # Apply dynamic scaling to box size ratio
+        scaled_box_ratio = box_size_ratio * dynamic_scale
+
+        box_width = int(ACTUAL_DISPLAY_SIZE[0] * scaled_box_ratio)
+        box_height = int(ACTUAL_DISPLAY_SIZE[1] * scaled_box_ratio)
+
 
         x1 = max(0, scaled_window_x - box_width // 2)
         y1 = max(0, scaled_window_y - box_height // 2)
@@ -283,14 +294,13 @@ def calculate_heatmap_with_detection(image, threshold=1e-7, amount=0.5, exponent
         y2 = min(ACTUAL_DISPLAY_SIZE[1], scaled_window_y + box_height // 2)
 
         # Draw bounding box for debugging
-        cv2.rectangle(power_detection, (x1, y1), (x2, y2), (255, 0, 255), 3)  # Purple box
-        cv2.circle(power_detection, (scaled_window_x, scaled_window_y), 5, (0, 0, 255), -1)  # Red center
-        # Store coordinates in rectangle_coords_conf
+        power_detection = (x1, y1, x2, y2)
+        power_detection_img = cv2.rectangle(power_detection_img, (x1, y1), (x2, y2), (0, 255, 100), 2)
 
         
         
     
-    return power_detection, heatmap, should_overlay
+    return power_detection, heatmap, should_overlay, power_detection_img
 
 def find_power_center(image, region_size=3):
     """Find center with OpenCV Gaussian smoothing"""
@@ -298,18 +308,17 @@ def find_power_center(image, region_size=3):
     image_f32 = image.astype(np.float32)
     
     # Apply Gaussian blur (kernel size should be odd)
-    kernel_size = 5  # Adjust for more/less smoothing
+    kernel_size = 9  # Adjust for more/less smoothing
     smoothed = cv2.GaussianBlur(image_f32, (kernel_size, kernel_size), sigmaX=1.0, sigmaY=1.0)
     
     max_val = np.max(smoothed)
-    threshold = max_val * 0.95
+    threshold = max_val * 0.85
     high_power_mask = smoothed >= threshold
     
     if np.sum(high_power_mask) > 0:
-        y_indices, x_indices = np.indices(smoothed.shape)
+        x_indices, y_indices = np.indices(smoothed.shape)
         
-        # Use cubed power for strong weighting
-        weights = (smoothed ** 3) * high_power_mask
+        weights = (smoothed ** 2) * high_power_mask
         total_weight = np.sum(weights)
         
         if total_weight > 0:
@@ -319,7 +328,7 @@ def find_power_center(image, region_size=3):
     
     # Fallback
     peak_idx = np.unravel_index(np.argmax(smoothed), smoothed.shape)
-    return peak_idx[1], peak_idx[0]
+    return peak_idx[0], peak_idx[1]
 
 import queue
 from multiprocessing import JoinableQueue, Value
@@ -384,7 +393,7 @@ class Front:
             # We need to invert Y-axis for the incoming frame since CV2 indexes it as Y - y
             self.q_out.put((vertical, 1.0 - horizontal))
             print(f"{horizontal}, {vertical}")
-
+import time
 
 class Viewer:
     """Test viewer used for outputting calculated heatmaps onto a screen
@@ -401,87 +410,12 @@ class Viewer:
         # self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
         # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
         # self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+        self.writer = None  # Will be initialized in loop()
+        self.record_output = True  # Toggle this if needed
+        self.output_path = "./recordings/output_video.avi"
+        self.fps = 30
+        self.frame_size = (640, 360)  # Adjust this to match combined_resized
 
-    def loop(self, q_power: JoinableQueue, v: Value, q_viewer: JoinableQueue = None, q_inference: JoinableQueue = None):
-        """Threaded or Multiprocessing loop that should not be called by the user
-
-        Args:
-            q (JoinableQueue): FIFO containing the latest powermaps from the algorithm
-            v (Value): a value that will stop this thread or process when other than 1
-            q2 (JoinableQueue, optional): FIFO containing YOLO processed frames
-        """
-        from sensorfusion.decider import sensorfusiondecider
-        prev = np.zeros((1080, 1920, 3), dtype=np.uint8)
-        self.MAX_X = MAX_ANGLE
-        self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
-        decider = sensorfusiondecider((640, 360), MAX_ANGLE=MAX_ANGLE, ASPECT_RATIO=ASPECT_RATIO)
-        while v.value == 1:
-            try:
-                yolo_frame_num, yolo_frame, conf = q_inference.get()
-                output, power_frame_number = q_power.get()
-                q_inference.task_done()
-                q_power.task_done()
-                viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else None
-                q_viewer.task_done()
-                print(f"Viewer frame: {viewer_frame_num}, Yolo frame: {yolo_frame_num}, Power frame: {power_frame_number}")
-                # while not (abs(viewer_frame_num - yolo_frame_num) < 5 and abs(viewer_frame_num - power_frame_number) < 5):
-                #     if viewer_frame_num < yolo_frame_num | viewer_frame_num < power_frame_number:
-                #         viewer_frame_num, frame = q_viewer.get(block=False) if q_viewer is not None else (None, None)
-                #         q_viewer.task_done()
-                #     elif yolo_frame_num < power_frame_number | yolo_frame_num < viewer_frame_num:
-                #         yolo_frame_num, yolo_frame, conf = q_inference.get(block=False)
-                #         q_inference.task_done()
-                #     elif power_frame_number < viewer_frame_num | power_frame_number < yolo_frame_num:
-                #         output, power_frame_number = q_power.get(block=False)
-                #         q_power.task_done()
-                    
-                if frame is None:
-                    frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
-                frame = cv2.flip(frame, 1) # Nobody likes looking out of the array :(
-                try:
-                    frame = cv2.resize(frame, WINDOW_DIMENSIONS)
-                except cv2.error as e:
-                    print("An error ocurred with image processing! Check if camera and antenna connected properly")
-                    v.value = 0
-                    break
-
-                powerlevel_box, res1, should_overlay = calculate_heatmap_with_detection(output)
-
-                res = cv2.addWeighted(prev, 0.5, res1, 0.5, 0)
-                prev = res
-                if HEATMAP_COLOR:
-                    image = cv2.addWeighted(frame, 0.9, res, 0.9, 0)
-                else:
-                    image = frame
-
-                # YOLO inference:
-                yolo_image = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
-                if q_inference is not None:
-                    try:
-                        if yolo_frame is not None:
-                            yolo_image = cv2.resize(yolo_frame, WINDOW_DIMENSIONS, interpolation=cv2.INTER_LINEAR)
-                    except queue.Empty:
-                        print("No YOLO frame received")
-                        pass
-                
-                if NUM_WINDOWS == 2:
-                    combined = np.hstack((image, yolo_image))
-                    display_size = (1280, 360)  # width, height for the window
-                    combined_resized = cv2.resize(combined, display_size)
-                    cv2.imshow(APPLICATION_NAME, combined_resized)
-                elif NUM_WINDOWS == 1:
-                    combined_resized = decider.create_image(image, yolo_image, powerlevel_box, res)
-                    if len(combined_resized.shape) == 2:
-                        combined_resized = cv2.cvtColor(combined_resized, cv2.COLOR_GRAY2BGR)
-                    cv2.imshow(APPLICATION_NAME, combined_resized)
-
-                cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
-                cv2.waitKey(1)
-            except queue.Empty:
-                pass
-            except KeyboardInterrupt:
-                v.value = 0
-                break
     def mouse_click_handler(self, event, x, y, flags, params):
         """Steers the antenna to listen in a specific direction"""
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -491,6 +425,93 @@ class Viewer:
             print(f"{horizontal}, {vertical}")
             self.cb(horizontal, vertical)
             print("Steering done")
+    
+    def loop(self, q_power: JoinableQueue, v: Value, q_viewer: JoinableQueue = None, q_inference: JoinableQueue = None):
+        """Threaded or Multiprocessing loop that should not be called by the user
+
+        Args:
+            q_power (JoinableQueue): FIFO containing the latest powermaps from the algorithm
+            v (Value): a value that will stop this thread or process when other than 1
+            q2_viewer(JoinableQueue): FIFO containing camera captured raw images
+            q_inference (JoinableQueue): FIFO containing YOLO processed frames
+        """
+        from sensorfusion.decider import sensorfusiondecider
+        decider_window_res = (640, 360)
+        decider = sensorfusiondecider(decider_window_res, MAX_ANGLE=MAX_ANGLE, ASPECT_RATIO=ASPECT_RATIO)
+        prev_heat_output = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        prev_heatmap = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        prev_viewer = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
+        self.MAX_X = MAX_ANGLE
+        self.MAX_Y = MAX_ANGLE / ASPECT_RATIO
+        if self.record_output and self.writer is None:
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')  # or 'MJPG', 'MP4V' for .mp4
+            self.writer = cv2.VideoWriter(self.output_path, fourcc, self.fps, self.frame_size)
+        while v.value == 1:
+            try:
+                start_time = time.time()
+                # First get frames, if no frame for image use previous
+                try:
+                    yolo_frame_num, yolo_frame, conf = q_inference.get()
+                    q_inference.task_done()
+                except queue.Empty:
+                    yolo_frame_num, yolo_frame, conf = None, None, None
+                try:
+                    power_output, power_frame_number = q_power.get()
+                    q_power.task_done()
+                except queue.Empty:
+                    power_output, power_frame_number = None, None
+                try:
+                    viewer_frame_num, viewer_frame = q_viewer.get(block=False)
+                    q_viewer.task_done()
+                except queue.Empty:
+                    viewer_frame_num, viewer_frame = None, None
+                if viewer_frame is None:
+                    viewer_frame = prev_viewer
+                else:
+                    prev_viewer = viewer_frame
+                viewer_frame = cv2.flip(viewer_frame, 1)
+                
+                if yolo_frame is None:
+                    yolo_frame = np.zeros((APPLICATION_WINDOW_HEIGHT, APPLICATION_WINDOW_WIDTH, 3), dtype=np.uint8)
+                if power_output is None:
+                    power_output = prev_heat_output
+                else:
+                    prev_heat_output = power_output
+                
+                # then get heatmap output
+                powerlevel_box, heatmap, should_overlay, power_detection_img = calculate_heatmap_with_detection(power_output)
+
+                # add heatmap to previous
+                res = cv2.addWeighted(prev_heatmap, 0.5, heatmap, 0.5, 0)
+                prev_heatmap = res
+
+                    
+                # if NUM_WINDOWS == 2:
+                #     combined = np.hstack((image, yolo_image))
+                #     display_size = (1280, 360)  # width, height for the window
+                #     combined_resized = cv2.resize(combined, display_size)
+                #     cv2.imshow(APPLICATION_NAME, combined_resized)
+                if NUM_WINDOWS == 1:
+                    combined_resized = decider.create_image(viewer_frame, yolo_frame, power_detection_img, conf, powerlevel_box, res)
+                    if self.record_output and self.writer is not None:
+                        frame_to_write = combined_resized
+                        if frame_to_write.shape[:2][::-1] != self.frame_size:
+                            frame_to_write = cv2.resize(frame_to_write, self.frame_size)
+                        self.writer.write(frame_to_write)
+                    if len(combined_resized.shape) == 2:
+                        combined_resized = cv2.cvtColor(combined_resized, cv2.COLOR_GRAY2BGR)
+                    cv2.imshow(APPLICATION_NAME, combined_resized)
+                    print("Ms: ", (time.time() - start_time) * 1000)
+
+                cv2.setMouseCallback(APPLICATION_NAME, self.mouse_click_handler)
+                cv2.waitKey(1)
+            except queue.Empty:
+                pass
+            except KeyboardInterrupt:
+                v.value = 0
+                break
+        if self.writer is not None:
+            self.writer.release()
 
 
 if __name__ == "__main__":
