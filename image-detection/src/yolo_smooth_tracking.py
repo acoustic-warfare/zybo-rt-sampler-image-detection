@@ -70,8 +70,12 @@ def track_with_correlation(prev_frame, curr_frame, prev_box):
 
 
 def process_video(video_path, model_path, rec=True):
+    "This function is only used for development and testing purposes and is not used in the program"
     detector = yolo_model(model_path)
     cap = cv2.VideoCapture(video_path)
+
+
+    #This part is only for recording the video, so call the function with rec=True to record the input video
 
     if rec:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -171,10 +175,13 @@ def process_video(video_path, model_path, rec=True):
 
 
 def process_video_track(video_path, model_path, rec=True):
+    "This function is only used for development and testing purposes and is not used in the program"
     detector = yolo_model(model_path)
     cap = cv2.VideoCapture(video_path)
     tracker = Sort()  # Initialize SORT tracker
 
+
+    #This part is only for recording the video, so call the function with rec=True to record the input video
     if rec:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -277,10 +284,16 @@ from multiprocessing import JoinableQueue, Value
 def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show=False, model_path=None, running: Value = None):
     detector = yolo_model(model_path)
     tracker = Sort()  # SORT tracker
+
+    # Initialize parameters
+    # These parameters can be adjusted based on your requirements for confidence thresholds and IoU
+    # Confidence thresholds for filtering detections
     confh = 0.7
     confl = 0.5
     iou_thresh = 0.5
     corr_thresh = 0.8
+
+
     rectangle_coords_conf = []
 
     prev_frame = None
@@ -357,9 +370,4 @@ def process_video_track_boxes_only(frame_queue, output_queue, stream=False, show
 
 
 if __name__ == "__main__":
-
-    process_video_track(
-        "/home/batman/programming/zybo-rt-sampler-image-detection/PC/recordings/output.mov",
-        "/home/batman/programming/zybo-rt-sampler-image-detection/image-detection/model/best_of_all.pt",
-        rec=False,
-    )
+    pass
