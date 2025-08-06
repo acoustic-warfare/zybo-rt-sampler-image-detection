@@ -85,93 +85,6 @@ class sensorfusiondecider:
         combined_resized = cv2.flip(combined, 1)  # Flip combined image
 
         return combined_resized
-    
-    def get_decision(self, image, yolo_image, power_detection_img, yolo_rect_conf, power_rect, heatmap):
-        yolo_image_use = True
-        power_image_use = True
-        best_rect = [0, 0, 0, 0, 0, 0]
-        blank = np.zeros_like(image)
-        decider_img = image.copy()
-        yolo_rect_conf = np.array(yolo_rect_conf)
-        iou = 0.0
-
-        #Start by checking the light level
-        light_level = self.get_lightlevel(image)
-        print("Light level:", light_level)
-        if light_level < 0.2 or not yolo_rect_conf.all():
-            print("Low light level or no yolo rects, using heatmap")
-            yolo_image_use = False
-        
-        #Now check the heatmap for entropy (multiple sources of sound or not)
-        entropy_conf = self.get_entropy(heatmap)
-        print("Entropy confidence:", entropy_conf)
-        self.entropy_history.append(entropy_conf)
-        adaptive_thresh = np.mean(self.entropy_history[-30:]) * 0.8
-
-        if entropy_conf < adaptive_thresh:
-            power_image_use = False
-            print("High entropy, using yolo detection")
-        
-        #if both false, decider image will be image
-        if not yolo_image_use and not power_image_use:
-            print("No valid detection, using image")
-            decider_img = image.copy()
-            return decider_img
-        decider_img = image.copy()
-
-        #if yolo true power false, use all yolo rects
-        if yolo_image_use and not power_image_use:
-            print("Using yolo detection only")
-            for rect in yolo_rect_conf:
-                x1, y1, x2, y2, conf = rect
-                if conf < self.image_confidence_threshold:
-                    continue
-                decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 255))
-            return decider_img
-
-
-        #if power true yolo false, use power rect
-        elif not yolo_image_use and power_image_use:
-            print("Using power detection only")
-            x1, y1, x2, y2 = power_rect
-            return self.create_rect(decider_img, (x1, y1, x2, y2), color=(0, 0, 255))
-        
-        #Check how many yolos
-        amount_inferences = len(yolo_rect_conf)
-
-        #If one and both use = true, check iou
-        if amount_inferences == 1 and yolo_image_use and power_image_use:
-            print("One yolo detection, checking iou")
-            iou = self.get_iou(yolo_rect_conf[0], power_rect)
-
-        #if no iou and still one, use yolo
-        if iou < 0.1 and amount_inferences == 1:
-            print("No iou, using yolo detection")
-            x1, y1, x2, y2, conf = yolo_rect_conf[0][:5]
-            decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 255))
-            return decider_img
-        
-        #if iou and still one, use intersection
-        elif iou > 0.1 and amount_inferences == 1:
-            print("High iou, using intersection")
-            rect = self.get_intersecting_rect(yolo_rect_conf[0], power_rect)
-            x1, y1, x2, y2 = rect
-            decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 0))
-            return decider_img
-
-        #if no iou and several yolo, get closest yolo weighted by confidence, but also limit to a certain distance(and if return is 0 use power rect)
-
-        elif iou < 0.1 and amount_inferences > 1:
-            print("No iou, using closest yolo detection")
-            closest_box = self.get_closest_rect(yolo_rect_conf, power_rect, 150)
-            x1, y1, x2, y2, conf = closest_box
-            if conf < self.image_confidence_threshold:
-                print("Low confidence, using power rect")
-                x1, y1, x2, y2 = power_rect
-                decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(0, 0, 255))
-            else:
-                decider_img = self.create_rect(decider_img, (x1, y1, x2, y2), color=(255, 0, 255))
-            return decider_img
         
     def get_decision_kalman(self, image, yolo_image, power_detection_img, yolo_rect_conf, power_rect, heatmap):
         yolo_image_use = True
@@ -274,28 +187,6 @@ class sensorfusiondecider:
                 
             return decider_img
         return image
-
-
-    
-    def focus_beam(self, callback, box):
-        x1, y1, x2, y2, conf = box[:5]
-        if conf < self.image_confidence_threshold:
-            print("Low confidence, not focusing beam")
-            return -1, -1
-        else:
-            x_mid = (x1 + x2) / 2
-            y_mid = (y1 + y2) / 2
-            horizontal = (x_mid / self.display_size[0]) * self.MAX_X * 2 - self.MAX_X
-            vertical = (y_mid / self.display_size[1]) * self.MAX_Y * 2 - self.MAX_Y
-            callback(horizontal, vertical)
-
-
-
-            # # steer(-horizontal, vertical)
-            # print(f"{horizontal}, {vertical}")
-            # self.cb(horizontal, vertical)
-
-        return 0
     
     def get_iou(self, box1, box2):
         x1, y1, x2, y2 = box1[:4]
@@ -397,22 +288,6 @@ class sensorfusiondecider:
             int(x2 * scale_x),
             int(y2 * scale_y)
         )
-
-
-    def is_plausible_movement(self, new_rect, old_rect, delta_time):
-        """Returns True if the movement is plausible based on speed constraint."""
-        if old_rect is None or delta_time is None:
-            return True  # First detection always passes
-        x1, y1, x2, y2 = new_rect[:4]
-        cx1 = (x1 + x2) / 2
-        cy1 = (y1 + y2) / 2
-
-        ox1, oy1, ox2, oy2 = old_rect[:4]
-        cx2 = (ox1 + ox2) / 2
-        cy2 = (oy1 + oy2) / 2
-
-        distance = np.sqrt((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2)
-        return (distance / delta_time) <= self.max_pixels_per_second
     
     def get_center(self, rect):
         """Returns the center of a rectangle."""

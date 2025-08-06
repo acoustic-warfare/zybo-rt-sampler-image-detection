@@ -406,10 +406,6 @@ class Viewer:
         """
         self.src = src
         self.cb = cb
-        #self.capture = cv2.VideoCapture(self.src)
-        # self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, APPLICATION_WINDOW_WIDTH)
-        # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, APPLICATION_WINDOW_HEIGHT)
-        # self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
         self.writer = None  # Will be initialized in loop()
         self.record_output = True  # Toggle this if needed
         self.output_path = "./recordings/output_video.avi"
@@ -485,12 +481,6 @@ class Viewer:
                 res = cv2.addWeighted(prev_heatmap, 0.5, heatmap, 0.5, 0)
                 prev_heatmap = res
 
-                    
-                # if NUM_WINDOWS == 2:
-                #     combined = np.hstack((image, yolo_image))
-                #     display_size = (1280, 360)  # width, height for the window
-                #     combined_resized = cv2.resize(combined, display_size)
-                #     cv2.imshow(APPLICATION_NAME, combined_resized)
                 if NUM_WINDOWS == 1:
                     combined_resized = decider.create_image(viewer_frame, yolo_frame, power_detection_img, conf, powerlevel_box, res)
                     if self.record_output and self.writer is not None:
