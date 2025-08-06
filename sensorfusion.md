@@ -17,7 +17,7 @@ Every image has a corresponding txt-file that is the label. They look like this:
 
 The first number corresponds to the Category and the rest is the cordinates of the bounding box of the object. YOLO-standard.
 
-The model that is included in the system is a YOLO11n. Where n stands for nano. It is trained for 50 epochs and had a batchsize of 32 and a imgsz of 320. More information on the trained model is avalible in ;"image-detection/model/yolov11trainedmodel". There can you also find the result of the training of that model. ("image-detection/model/yolov11trainedmodel/results.png"). There is a README-file for the yolo_smooth_tracking-file that descibes that file better and it is located here ("image-detection/src/README.md").
+The model that is included in the system is a YOLO11n. Where n stands for nano. It is trained for 50 epochs and had a batchsize of 32 and a imgsz of 320. More information on the trained model is avalible in ;"image-detection/model/yolov11trainedmodel". There can you also find the result of the training of that model. ("image-detection/src/yolov11trainedmodel/results.png"). There is a README-file for the yolo_smooth_tracking-file that descibes that file better and it is located here ("image-detection/src/README.md").
 
 
 

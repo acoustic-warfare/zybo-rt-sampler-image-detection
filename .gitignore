@@ -51,6 +51,3 @@ venv/
 #Image detection files
 image-detection/model/*
 image-detection/footage/*
-
-#to big weights files
-src/yolov11trainedmodel/weights/*
