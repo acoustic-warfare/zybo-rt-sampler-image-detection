@@ -30,17 +30,5 @@ By analysing the heatmap we're able to find out the entropy of the incoming soun
 ## Implementation
 Using the variables we receive from our sensors, we can determine whether using image detection or the heatmap is the better choice at the moment. This means that when there are several drones flying, we use image detection. If it is dark, we use sound. Finally, we use a kalman filter to process both the heatmap rectangle and the rectangle we receive from yolo in order to be able to predict where the drone will be as well as making sure the interference from sound bouncing(leading to slightly erratic heatmap, thus slightly erratic heatmap rectangle) is lessened, making the tracking much smoother.
 
-
-
-- Software tools and libraries
-- Integration of sensors
-- Key challenges and solutions
-
-## Results
-- Sample outputs (images, sound waveforms, detection events)
-
-## Conclusion
-Summary of findings, limitations, and future work.
-
-## References
-List of relevant papers, documentation, and resources.
+## Future work
+Fix fov difference between beamforming and camera, could be interesting to train a ML model with the heatmaps produced by acoustic warfare for a usable confidence score(where right now only the entropy is used). Using cameras capable of receiving different light wavelengths could be interesting as an additional sensor, IR cameras for example. 

@@ -114,8 +114,6 @@ class sensorfusiondecider:
         if not yolo_image_use and not power_image_use:
             print("No valid detection, using image")
             decider_img = image.copy()
-            decider_img = self.create_rect(decider_img, self.kalman.get_smoothed_state(), color=(0, 0, 0))
-
             return decider_img
         
         #if yolo true power false, use all yolo rects
